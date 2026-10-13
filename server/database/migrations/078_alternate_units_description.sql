@@ -1,0 +1,10 @@
+-- Migration 078: Add description column to alternate_units
+-- The alternate_units table (created in migration 070) did not have a
+-- description column. Migration 072 re-defined it with description via
+-- CREATE TABLE IF NOT EXISTS, but since the table already existed from
+-- 070, the description column was never actually added.
+--
+-- This migration adds the missing description column programmatically
+-- in migrate.js (via db.exec ALTER TABLE), so this SQL file is a no-op
+-- placeholder to keep migration numbering consistent.
+-- The actual ALTER TABLE runs in server/database/migrate.js Step 078.

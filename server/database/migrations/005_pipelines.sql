@@ -1,0 +1,19 @@
+CREATE TABLE IF NOT EXISTS pipeline_stages (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  stage_order INTEGER NOT NULL,
+  probability REAL DEFAULT 0.0,
+  color TEXT DEFAULT '#64748b',
+  is_won INTEGER DEFAULT 0,
+  is_lost INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS pipelines (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  is_default INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

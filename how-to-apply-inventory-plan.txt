@@ -1,0 +1,129 @@
+How to Apply the Inventory Implementation Plan (Blackstack CRM V2)
+================================================================
+
+This guide describes the step-by-step process to set up and test the
+Inventory Management module in Blackstack CRM V2 from a fresh state.
+
+────────────────────────────────────────────────────────────
+1. Prerequisites
+────────────────────────────────────────────────────────────
+- Node.js v26+.7.0
+- Chrome browser (for visible Playwright testing)
+- Windows host with git-bash/MSYS shell
+
+────────────────────────────────────────────────────────────
+2. Fresh Database Setup
+────────────────────────────────────────────────────────────
+The server runs migrations and seeds automatically on startup
+in DEMO_MODE. If you need a clean database:
+
+  cd "/d/Work/Projects/blackstack/CB CRM V2/blackstack-crm-v2"
+  rm -f data/blackstack-crm.db data/blackstack-crm.db-wal data/blackstack-crm.db-shm
+  DB_PATH=./data/blackstack-crm.db NODE_ENV=development \
+    DEMO_MODE=true PORT=3000 node server/app.js
+
+The server will:
+  - Apply all 63 migrations (creates accounts, products, stock_items,
+    stock_categories, units_of_measure, godowns, etc.)
+  - Seed demo data (admin@blackstack.local / admin123)
+  - Seed inventory masters (Electronics, Each/Kilogram/Liter, etc.)
+
+────────────────────────────────────────────────────────────
+3. Key Architecture
+────────────────────────────────────────────────────────────
+- products          : Canonical product master (name, sku, price, cost)
+- stock_items      : Inventory extension (FK → products.id)
+- stock_balances   : Current quantities (FK → stock_items.id)
+- stock_ledger     : Transaction history
+- units_of_measure : UOM masters (Each, Kilogram, Liter)
+- stock_categories : Category masters (Electronics, Software, etc.)
+- godowns          : Warehouse locations (god_001 = Main Warehouse)
+- accounts         : Chart of accounts (acc_cash, acc_cogs, etc.)
+
+When a product is created with `track_inventory`:
+  → A stock_items row is auto-created with product_id FK
+  → Default UOM, category, and accounts are auto-assigned
+
+When a stock item is created via the Inventory page:
+  → A product is auto-created and linked via product_id
+
+────────────────────────────────────────────────────────────
+4. Running the E2E Test
+────────────────────────────────────────────────────────────
+  cd "/d/Work/Projects/blackstack/CB CRM V2/blackstack-crm-v2"
+  node tests/product-create-e2e.js
+
+This test will:
+  - Open a visible Chrome browser (headless: false)
+  - Log in as admin@blackstack.local / admin123
+  - Create a Product with serial tracking enabled
+  - Verify it appears in the products table
+  - Clean up the product and its linked stock item
+  - Navigate to Inventory > Stock Items
+  - Create a Stock Item with serial + batch tracking
+  - Verify it appears in the stock items table
+  - Clean up the stock item and its linked product
+
+Expected output:
+  [PASS] Login successful
+  [PASS] Product created with ID: prod_...
+  [PASS] Product visible in table
+  [PASS] Stock Item created with ID: stoc_...
+  [PASS] Stock Item visible in table
+  [DONE]
+
+────────────────────────────────────────────────────────────
+5. Manual Testing: Add Stock Item
+────────────────────────────────────────────────────────────
+1. Start server:
+   DB_PATH=./data/blackstack-crm.db NODE_ENV=development \
+     DEMO_MODE=true PORT=3000 node server/app.js
+
+2. Open browser: http://localhost:3000/login.html
+3. Log in: admin@blackstack.local / admin123
+4. Navigate to: http://localhost:3000/index.html#inventory
+5. Click the "Stock Items" card
+6. Click "New" button (#inv-master-new)
+7. Fill the form:
+   - Name: Unique item name
+   - SKU: Unique SKU code
+   - Unit of Measure: Select from dropdown
+   - Category: (optional) Select from dropdown
+   - Description: (optional) Text area
+   - Cost Price: Numeric value
+   - Selling Rate: Numeric value
+   - MRP: (optional) Numeric value
+   - Min/Max Stock Level: (optional) Numeric values
+   - Batch Tracked: Yes/No
+   - Serial Tracked: Yes/No
+8. Click "Save"
+9. Verify the item appears in the table with all columns:
+   Name, SKU, Product, UOM, Category, Brand, Cost, Selling,
+   On Hand, Value, Serial, Batch, Status, Actions
+
+────────────────────────────────────────────────────────────
+6. API Reference
+────────────────────────────────────────────────────────────
+POST   /api/inventory/stocks              Create stock item
+GET    /api/inventory/stocks              List stock items
+GET    /api/inventory/stocks/sku/:sku     Get by SKU
+GET    /api/inventory/stocks/product/:pid Get by product ID
+DELETE /api/inventory/stocks/:id          Soft-delete stock item
+
+POST   /api/products                      Create product (+ auto stock_item)
+GET    /api/products                      List products
+GET    /api/products/:id                  Get product (with nested stockItem)
+PUT    /api/products/:id                  Update product (syncs to stock_item)
+DELETE /api/products/:id                  Delete product
+
+────────────────────────────────────────────────────────────
+7. Cleanup Commands
+────────────────────────────────────────────────────────────
+Delete all test records (use with caution — removes ALL items):
+  node -e "const{DatabaseSync}=require('node:sqlite'); \
+    const db=new DatabaseSync('./data/blackstack-crm.db'); \
+    db.exec('DELETE FROM stock_items WHERE name LIKE \"E2E%\" OR sku LIKE \"E2E-%\"'); \
+    db.exec('DELETE FROM products WHERE name LIKE \"E2E%\" OR sku LIKE \"E2E-%\" AND id != \"prod_001\"');"
+
+Full database reset:
+  rm -f data/blackstack-crm.db data/blackstack-crm.db-wal data/blackstack-crm.db-shm

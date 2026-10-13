@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <meta content="BlackStack CRM V2" name="description"/>
+  <title>BlackStack CRM</title>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com">
+  </script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'primary': '#000000',
+            'on-primary': '#ffffff',
+            'primary-container': '#1c1b1b',
+            'on-primary-container': '#858383',
+            'primary-fixed': '#e5e2e1',
+            'primary-fixed-dim': '#c8c6c5',
+            'on-primary-fixed': '#1c1b1b',
+            'on-primary-fixed-variant': '#474746',
+            'inverse-primary': '#c8c6c5',
+            'secondary': '#0058be',
+            'on-secondary': '#ffffff',
+            'secondary-container': '#2170e4',
+            'on-secondary-container': '#fefcff',
+            'secondary-fixed': '#d8e2ff',
+            'secondary-fixed-dim': '#adc6ff',
+            'on-secondary-fixed': '#001a42',
+            'on-secondary-fixed-variant': '#004395',
+            'tertiary': '#000000',
+            'on-tertiary': '#ffffff',
+            'tertiary-container': '#1c1b1a',
+            'on-tertiary-container': '#868382',
+            'tertiary-fixed': '#e6e2df',
+            'tertiary-fixed-dim': '#cac6c4',
+            'on-tertiary-fixed': '#1c1b1a',
+            'on-tertiary-fixed-variant': '#484645',
+            'error': '#ba1a1a',
+            'on-error': '#ffffff',
+            'error-container': '#ffdad6',
+            'on-error-container': '#93000a',
+            'background': '#fdf8f8',
+            'on-background': '#1c1b1b',
+            'surface': '#fdf8f8',
+            'on-surface': '#1c1b1b',
+            'surface-variant': '#e5e2e1',
+            'on-surface-variant': '#444748',
+            'surface-container': '#f1edec',
+            'surface-container-low': '#f7f3f2',
+            'surface-container-high': '#ebe7e6',
+            'surface-container-highest': '#e5e2e1',
+            'surface-container-lowest': '#ffffff',
+            'surface-bright': '#fdf8f8',
+            'surface-dim': '#ddd9d8',
+            'surface-tint': '#5f5e5e',
+            'inverse-surface': '#313030',
+            'inverse-on-surface': '#f4f0ef',
+            'outline': '#747878',
+            'outline-variant': '#c4c7c7',
+          },
+          borderRadius: {
+            'DEFAULT': '0.125rem',
+            'lg': '0.25rem',
+            'xl': '0.5rem',
+            'full': '0.75rem',
+          },
+          spacing: {
+            'stack-sm': '8px',
+            'stack-md': '16px',
+            'stack-lg': '32px',
+            'container-padding': '24px',
+            'gutter': '16px',
+            'unit': '4px',
+          },
+          fontFamily: {
+            'body': ['Inter', 'sans-serif'],
+            'display': ['Inter', 'sans-serif'],
+            'code': ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+          },
+          fontSize: {
+            'body-sm': ['12px', { lineHeight: '16px' }],
+            'body-md': ['14px', { lineHeight: '20px' }],
+            'label-md': ['12px', { lineHeight: '16px', letterSpacing: '0.5px' }],
+            'h3': ['18px', { lineHeight: '24px', letterSpacing: '-0.3px' }],
+            'h1': ['28px', { lineHeight: '36px', letterSpacing: '-0.6px' }],
+            'display': ['32px', { lineHeight: '40px', letterSpacing: '-0.8px' }],
+            'code': ['12px', { lineHeight: '16px' }],
+          },
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body class="bg-background font-body-md text-on-background antialiased">
+  <div id="app" class="min-h-screen">
+    <aside id="sidebar" class="fixed left-0 top-0 h-full w-64 bg-surface-container-low z-50 flex flex-col border-r border-outline-variant transform -translate-x-full md:translate-x-0 transition-transform duration-300">
+      <div class="h-16 flex items-center px-container-padding border-b border-outline-variant shrink-0">
+        <div class="flex items-center gap-stack-sm">
+          <div class="w-8 h-8 bg-primary flex items-center justify-center rounded-lg">
+            <span class="material-symbols-outlined text-on-primary text-[20px]">token</span>
+          </div>
+          <span class="font-display text-h3 text-on-surface tracking-tight">BlackStack</span>
+        </div>
+      </div>
+      <nav id="sidebar-nav" class="flex-1 overflow-y-auto py-stack-md px-stack-sm space-y-1" aria-label="Main navigation">
+      </nav>
+      <div class="p-stack-sm border-t border-outline-variant shrink-0">
+        <div id="sidebar-user" class="flex items-center gap-stack-sm px-stack-md py-2">
+        </div>
+      </div>
+    </aside>
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black/40 z-40 hidden md:hidden" aria-hidden="true"></div>
+    <header id="topbar" class="fixed top-0 left-0 md:left-64 right-0 h-16 bg-surface-bright/95 backdrop-blur border-b border-outline-variant/50 z-40 flex items-center justify-between px-container-padding">
+      <div class="flex items-center gap-stack-md flex-1">
+        <button id="sidebar-toggle" class="md:hidden w-10 h-10 flex items-center justify-center rounded-lg hover:bg-surface-container transition-colors" aria-label="Toggle sidebar">
+          <span class="material-symbols-outlined text-[20px] text-on-surface">menu</span>
+        </button>
+        <div id="topbar-search" class="relative w-full max-w-md hidden sm:block">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
+          <input type="text" placeholder="Search contacts, deals, bills..." class="w-full bg-surface-container-low py-2 pl-10 pr-4 rounded-lg font-body-sm text-body-sm focus:outline-none focus:ring-2 focus:ring-secondary/40 placeholder:text-on-surface-variant/70 transition-shadow" aria-label="Global search"/>
+        </div>
+      </div>
+      <div class="flex items-center gap-stack-sm">
+        <div id="topbar-notifications" class="relative">
+          <button class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-surface-container transition-colors relative" aria-label="Notifications">
+            <span class="material-symbols-outlined text-[20px] text-on-surface-variant">notifications</span>
+            <span id="notification-badge" class="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full hidden"></span>
+          </button>
+        </div>
+        <div id="topbar-user" class="relative">
+        </div>
+      </div>
+    </header>
+    <main id="main-content" class="md:ml-64 pt-16 min-h-screen">
+      <div id="page-container" class="p-container-padding">
+      </div>
+    </main>
+  </div>
+  <div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none"></div>
+  <div id="modal-root" class="hidden"></div>
+  <script src="/js/api/client.js"></script>
+  <script src="/js/api/auth.js"></script>
+  <script src="/js/api/crud.js"></script>
+  <script src="/js/auth/auth-guard.js"></script>
+  <script src="/js/components/Modal.js"></script>
+  <script src="/js/components/Toast.js"></script>
+  <script src="/js/components/ErrorState.js"></script>
+  <script src="/js/components/DataTable.js"></script>
+  <script src="/js/components/Pagination.js"></script>
+  <script src="/js/components/StatusBadge.js"></script>
+  <script src="/js/components/EntitySelector.js"></script>
+  <script src="/js/components/Sidebar.js"></script>
+  <script src="/js/components/Topbar.js"></script>
+  <script src="/js/utils/currency.js"></script>
+  <script src="/js/pages/dashboard.js"></script>
+  <script src="/js/pages/mother-company.js"></script>
+  <script src="/js/pages/contacts.js"></script>
+  <script src="/js/pages/contact-detail.js"></script>
+  <script src="/js/pages/organizations.js"></script>
+  <script src="/js/pages/deals.js"></script>
+  <script src="/js/pages/deal-detail.js"></script>
+  <script src="/js/pages/products.js"></script>
+  <script src="/js/pages/invoices.js"></script>
+  <script src="/js/pages/payments.js"></script>
+  <script src="/js/accounting/state.js"></script>
+  <script src="/js/pages/accounting.js"></script>
+  <script src="/js/pages/chart-of-accounts.js"></script>
+  <script src="/js/pages/journal.js"></script>
+  <script src="/js/pages/bills.js"></script>
+  <script src="/js/pages/customer-bills.js"></script>
+  <script src="/js/pages/receivables.js"></script>
+  <script src="/js/pages/payables.js"></script>
+  <script src="/js/pages/outstanding.js"></script>
+  <script src="/js/pages/ledger.js"></script>
+  <script src="/js/pages/ledger-detail.js"></script>
+  <script src="/js/pages/accounting-reports.js"></script>
+  <script src="/js/pages/accounting-masters.js"></script>
+  <script src="/js/pages/activities.js"></script>
+  <script src="/js/pages/tasks.js"></script>
+  <script src="/js/pages/notes.js"></script>
+  <script src="/js/pages/workflows.js"></script>
+  <script src="/js/pages/leads.js"></script>
+  <script src="/js/pages/lead-detail.js"></script>
+  <script src="/js/pages/appointments.js"></script>
+  <script src="/js/pages/action-center.js"></script>
+  <script src="/js/pages/users.js"></script>
+  <script src="/js/pages/settings.js"></script>
+  <script src="/js/pages/search.js"></script>
+  <script src="/js/pages/profile.js"></script>
+  <script src="/js/pages/404.js"></script>
+  <script src="/js/pages/403.js"></script>
+  <script src="/js/pages/500.js"></script>
+  <script src="/js/pages/401.js"></script>
+  <script src="/js/pages/inventory.js"></script>
+  <script src="/js/pages/inventory-sub.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

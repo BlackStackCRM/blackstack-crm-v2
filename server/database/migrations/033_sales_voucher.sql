@@ -1,0 +1,7 @@
+-- Migration 033: Sales Voucher / Sales Invoice support
+-- (No schema changes needed — all Sales columns were added to the
+--  vouchers table in migration 022: sales_invoice_number,
+--  receiving_ledger_id, sales_ledger_id, and 'SALES' was added to
+--  the voucher_type CHECK constraint in migration 022.)
+--
+-- This file is kept for migration history completeness.

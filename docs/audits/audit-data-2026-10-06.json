@@ -1,0 +1,3255 @@
+{
+  "meta": {
+    "databasePath": "D:\\Work\\Projects\\blackstack\\CB CRM V2\\blackstack-crm-v2\\data\\blackstack-crm.db",
+    "sizeBytes": 2875392,
+    "sizeMB": 2.74,
+    "sqliteVersion": "3.53.4",
+    "journalMode": "wal",
+    "foreignKeysEnabled": 1,
+    "modified": "2026-10-05T19:15:38.026Z",
+    "tableCount": 141,
+    "indexCount": 271,
+    "triggerCount": 0,
+    "viewCount": 0,
+    "tables": [
+      "_payments_backup",
+      "account_groups",
+      "account_types",
+      "accounting_audit",
+      "accounts",
+      "activities",
+      "adjustment_reasons",
+      "alternate_units",
+      "ap_reconciliation_log",
+      "appointments",
+      "ar_reconciliation_log",
+      "audit_logs",
+      "bad_debt_cases",
+      "bank_accounts",
+      "bank_reconciliation_items",
+      "bank_reconciliations",
+      "batch_wise_stock",
+      "batches",
+      "bill_allocations",
+      "bill_approvals",
+      "bill_events",
+      "bill_items",
+      "bill_templates",
+      "bills",
+      "brands",
+      "budget_lines",
+      "budgets",
+      "collection_action_logs",
+      "collection_actions",
+      "collection_activities",
+      "collection_assignments",
+      "collection_audit",
+      "collection_escalations",
+      "collection_risk_scores",
+      "collection_rules",
+      "colours",
+      "communication_templates",
+      "companies",
+      "company_tax_configs",
+      "compound_units",
+      "contact_tags",
+      "contacts",
+      "cost_categories",
+      "cost_centres",
+      "credit_note_lines",
+      "credit_rules",
+      "currencies",
+      "customer_advances",
+      "customer_bill_audit_log",
+      "customer_bill_disputes",
+      "customer_bill_writeoffs",
+      "customer_disputes",
+      "customers",
+      "database_health_logs",
+      "deals",
+      "debit_note_lines",
+      "expense_voucher_lines",
+      "financial_years",
+      "godowns",
+      "interest_calculations",
+      "interest_charges",
+      "interest_configs",
+      "interest_rules",
+      "inv_locations",
+      "inventory_items",
+      "inventory_items_v2",
+      "inventory_movements",
+      "inventory_voucher_headers",
+      "inventory_voucher_lines",
+      "invoice_line_items",
+      "invoices",
+      "item_prices",
+      "item_serials",
+      "journal_entries",
+      "journal_entry_lines",
+      "leads",
+      "legacy_tables",
+      "locations",
+      "models",
+      "notes",
+      "notifications",
+      "number_sequences",
+      "opening_balance_lines",
+      "opening_balances",
+      "organizations",
+      "payable_allocations",
+      "payables",
+      "payment_plan_installments",
+      "payment_plans",
+      "payment_reconciliations",
+      "payment_reminders",
+      "payments",
+      "permissions",
+      "physical_stock_documents",
+      "physical_stock_lines",
+      "pipeline_stages",
+      "pipelines",
+      "price_levels",
+      "product_specifications",
+      "products",
+      "promises_to_pay",
+      "rate",
+      "receivable_allocations",
+      "receivables",
+      "recurring_bills",
+      "recurring_generation_log",
+      "relationships",
+      "role_permissions",
+      "roles",
+      "schema_migrations",
+      "select_options",
+      "sizes",
+      "specification_attributes",
+      "specification_templates",
+      "stock_adjustment_reasons",
+      "stock_balances",
+      "stock_categories",
+      "stock_groups",
+      "stock_items",
+      "stock_ledger",
+      "styles",
+      "system_metadata",
+      "tags",
+      "tasks",
+      "tax_account_mappings",
+      "tax_audit_log",
+      "tax_components",
+      "tax_masters",
+      "tax_types",
+      "transaction_tax_details",
+      "units_of_measure",
+      "uoms",
+      "user_roles",
+      "users",
+      "valuation_movements",
+      "vouchers",
+      "workflow_definitions",
+      "workflow_executions",
+      "workflow_instances",
+      "workflow_nodes",
+      "year_end_closings"
+    ],
+    "views": [],
+    "triggers": [],
+    "maxMigrationVersion": 80,
+    "foreignKeyCount": 234,
+    "ungroupedTables": [
+      "accounting_audit",
+      "collection_audit",
+      "communication_templates",
+      "inventory_items_v2",
+      "notifications",
+      "tags"
+    ]
+  },
+  "integrity": {
+    "integrityCheck": {
+      "integrity_check": "ok"
+    },
+    "quickCheck": {
+      "quick_check": "ok"
+    },
+    "foreignKeyCheck": [],
+    "fkViolationCount": 0
+  },
+  "counts": {
+    "_payments_backup": 0,
+    "account_groups": 22,
+    "account_types": 0,
+    "accounting_audit": 0,
+    "accounts": 24,
+    "activities": 0,
+    "adjustment_reasons": 7,
+    "alternate_units": 0,
+    "ap_reconciliation_log": 0,
+    "appointments": 0,
+    "ar_reconciliation_log": 0,
+    "audit_logs": 337,
+    "bad_debt_cases": 0,
+    "bank_accounts": 0,
+    "bank_reconciliation_items": 0,
+    "bank_reconciliations": 0,
+    "batch_wise_stock": 0,
+    "batches": 1,
+    "bill_allocations": 0,
+    "bill_approvals": 0,
+    "bill_events": 0,
+    "bill_items": 0,
+    "bill_templates": 0,
+    "bills": 0,
+    "brands": 1,
+    "budget_lines": 0,
+    "budgets": 0,
+    "collection_action_logs": 0,
+    "collection_actions": 0,
+    "collection_activities": 0,
+    "collection_assignments": 0,
+    "collection_audit": 0,
+    "collection_escalations": 0,
+    "collection_risk_scores": 0,
+    "collection_rules": 0,
+    "colours": 0,
+    "communication_templates": 0,
+    "companies": 1,
+    "company_tax_configs": 1,
+    "compound_units": 0,
+    "contact_tags": 0,
+    "contacts": 1,
+    "cost_categories": 0,
+    "cost_centres": 0,
+    "credit_note_lines": 0,
+    "credit_rules": 0,
+    "currencies": 4,
+    "customer_advances": 0,
+    "customer_bill_audit_log": 0,
+    "customer_bill_disputes": 0,
+    "customer_bill_writeoffs": 0,
+    "customer_disputes": 0,
+    "customers": 0,
+    "database_health_logs": 0,
+    "deals": 0,
+    "debit_note_lines": 0,
+    "expense_voucher_lines": 0,
+    "financial_years": 2,
+    "godowns": 2,
+    "interest_calculations": 0,
+    "interest_charges": 0,
+    "interest_configs": 0,
+    "interest_rules": 0,
+    "inv_locations": 0,
+    "inventory_items": 0,
+    "inventory_items_v2": 0,
+    "inventory_movements": 0,
+    "inventory_voucher_headers": 2,
+    "inventory_voucher_lines": 2,
+    "invoice_line_items": 0,
+    "invoices": 0,
+    "item_prices": 0,
+    "item_serials": 2,
+    "journal_entries": 25,
+    "journal_entry_lines": 102,
+    "leads": 0,
+    "legacy_tables": 5,
+    "locations": 7,
+    "models": 2,
+    "notes": 0,
+    "notifications": 0,
+    "number_sequences": 2,
+    "opening_balance_lines": 0,
+    "opening_balances": 0,
+    "organizations": 1,
+    "payable_allocations": 0,
+    "payables": 0,
+    "payment_plan_installments": 0,
+    "payment_plans": 0,
+    "payment_reconciliations": 0,
+    "payment_reminders": 0,
+    "payments": 0,
+    "permissions": 103,
+    "physical_stock_documents": 0,
+    "physical_stock_lines": 0,
+    "pipeline_stages": 4,
+    "pipelines": 0,
+    "price_levels": 0,
+    "product_specifications": 0,
+    "products": 3,
+    "promises_to_pay": 0,
+    "rate": 0,
+    "receivable_allocations": 0,
+    "receivables": 0,
+    "recurring_bills": 0,
+    "recurring_generation_log": 0,
+    "relationships": 0,
+    "role_permissions": 122,
+    "roles": 3,
+    "schema_migrations": 68,
+    "select_options": 18,
+    "sizes": 0,
+    "specification_attributes": 45,
+    "specification_templates": 7,
+    "stock_adjustment_reasons": 7,
+    "stock_balances": 2,
+    "stock_categories": 2,
+    "stock_groups": 2,
+    "stock_items": 3,
+    "stock_ledger": 2,
+    "styles": 0,
+    "system_metadata": 1,
+    "tags": 0,
+    "tasks": 0,
+    "tax_account_mappings": 8,
+    "tax_audit_log": 0,
+    "tax_components": 12,
+    "tax_masters": 11,
+    "tax_types": 12,
+    "transaction_tax_details": 0,
+    "units_of_measure": 1,
+    "uoms": 0,
+    "user_roles": 1,
+    "users": 1,
+    "valuation_movements": 0,
+    "vouchers": 25,
+    "workflow_definitions": 0,
+    "workflow_executions": 0,
+    "workflow_instances": 0,
+    "workflow_nodes": 0,
+    "year_end_closings": 0
+  },
+  "migrations": [
+    {
+      "version": 1,
+      "name": "database_foundation",
+      "sha256": "b48a1ccb60096348c55c737aa4d2f23be1c12cdd483380ef6e92d6dc0953ccdd",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 2,
+      "name": "identity",
+      "sha256": "d892403909698c9c1da61bffd91190ee5d938ff538c32491c571f90646937a32",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 3,
+      "name": "contacts_tags",
+      "sha256": "a187a64405bb9c86b0496e1ed320dd5c3d70d68c7ab955b81182059ce4d02cb1",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 4,
+      "name": "relationships",
+      "sha256": "ef5e4883066fb69ed957403b43ef422bd31875380f42257df95c56043a88a8c6",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 5,
+      "name": "pipelines",
+      "sha256": "25064c611e27a38dd38d3c4255ca7c04d39c23681ef5b7f8bd465293032333bf",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 6,
+      "name": "deals",
+      "sha256": "852bd62d98f16dc591dc4b8f9bcafbf093d2e35ead8c18009b08b5906a9ee8a0",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 7,
+      "name": "products",
+      "sha256": "eaf80595f1cf3095470f8108591710c642ccd3c05a1c41eedb6344b71cf12f1e",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 8,
+      "name": "invoices",
+      "sha256": "e2fb2c8936b9a01d13bdbc28699b59d3e59378ec9e72a625cb3b80020ea67941",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 9,
+      "name": "payments",
+      "sha256": "c8c481debb10f566e9c4d3bd922a9ef91d08b6a14e23e2e6d902e449d3edef10",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 10,
+      "name": "activities_tasks",
+      "sha256": "d55aa5c42ad737e494330021bf1f63330d9223350d6efe874703b80a1df3652b",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 11,
+      "name": "notes",
+      "sha256": "08d7a5ead1c78fb37fee3bcfa6a4369e67f0ca748ea5d7913ef2410f4c9c44ce",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 12,
+      "name": "workflows",
+      "sha256": "e2720bf168d0d681ce89944b13fbb628bad899d1e0f78fd331838c06d2a22071",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 13,
+      "name": "audit",
+      "sha256": "a578a0872c62ca2ba4b59591469798096946dcebbc74d5b39c88afc56d292194",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 14,
+      "name": "indexes",
+      "sha256": "069246630299d08eda5368e0963eef25fb79a5ad2d864af1345528e2d947d5d2",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 15,
+      "name": "seed_permissions",
+      "sha256": "6831290c2f7a03447e3cc4d97fb7f5e2cc40ec142310d1ff18eddb7a3bf72b34",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 16,
+      "name": "leads_customers_appointments",
+      "sha256": "9ea542439018c704aa1d83c80ad9a48a72c53911accf978623271afa7e99da5b",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 17,
+      "name": "workflow_executor",
+      "sha256": "a3f3537f085ac94cb9baef287c9afbf03834e5c746b0c36bfa101bc35cd2caa2",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 18,
+      "name": "contact_extensions",
+      "sha256": "1aad8d084a4ea32e6fcb4ce3f23f27a08171f4e2b2de2df97742fab311b89964",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 19,
+      "name": "indexes_extended",
+      "sha256": "1e1f5f75b39eafd5f9b16f2d6748d492a795e76d914bc8346ea92f00625d4872",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 20,
+      "name": "contact_centric",
+      "sha256": "2cd7826314b2ef0149edbb8e5ae1ecfdf82a3269abaa261d8d2f97e01c70a41a",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 21,
+      "name": "currency_invoices_payments",
+      "sha256": "08ed34a34696a69159277faa6e74d236ba73c7a32fe241f6bcd059efeef09d5f",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 22,
+      "name": "accounting_schema",
+      "sha256": "35af824cceb02041133800936cc4708daeb8ad16a28ff2638d29af2690213f8c",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 23,
+      "name": "seed_chart_of_accounts",
+      "sha256": "2dba82588ad9827573534b253efb247196e6a4035e9ad4fe91ad14f8a47b514d",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 24,
+      "name": "accounting_permissions",
+      "sha256": "a3b01f544bf493cea579ce328d3b0e542a6359a9de8c1dc1407b23e2bcb0a1f9",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 25,
+      "name": "migrate_invoices_to_accounting",
+      "sha256": "78b99ed7b314dd00cb011115747d988dd29086d8f36387643484f25c56947f51",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 26,
+      "name": "accounting_payments",
+      "sha256": "f776266fd94015e451acfba7237d4f37656cab11d3c8c20638402f89208605de",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 27,
+      "name": "coa_enhancements",
+      "sha256": "a9e26b0de17aae25c17cba26ccc8c4882fb0e5410e0fbd1c1ff73ddc45ddb879",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 28,
+      "name": "account_groups_enhancements",
+      "sha256": "aaf6108889899cebb873dd1c1c59386ac4095a5cef3d811b7333e872c140b88a",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 29,
+      "name": "ledger_account_protected_flag",
+      "sha256": "a6e7e1a523a974681c4b9430d048a22a3c7aa248081e94a4382aed77e94f7d25",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 30,
+      "name": "opening_balances",
+      "sha256": "0fa03006da548644067b75f7dc7235eb0ac07fed2bf9948efb86f01fccfc3ffb",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 31,
+      "name": "journal_entry_fy",
+      "sha256": "dc6347feefaacdd5189a19b791f1499406f7d44f7bce6af25629c76476b793ea",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 32,
+      "name": "receipt_voucher",
+      "sha256": "b2e1e0f02fb0e8a944785ee061bf47dda708d3a017e15aecc5096dbf0ec38568",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 33,
+      "name": "sales_voucher",
+      "sha256": "3bec872917971c876907118ac450f7c7a43939eb704d8ebcb4468dab8b992220",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 34,
+      "name": "expense_voucher_lines",
+      "sha256": "59870e60d318cc443218713f57a0004c19982b926dbb7f2bf025b1d15f7b2c1c",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 35,
+      "name": "credit_note",
+      "sha256": "fa4e6189102e6382d5a84e36b746b0db930e5cc1e7ef71ec21509ca9b4a76109",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 36,
+      "name": "debit_note",
+      "sha256": "04bb28a383740eb9042b32f4f4e235d9e367ca198e7b0892407474fa1db547d6",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 37,
+      "name": "delete_safety_soft_delete",
+      "sha256": "c2fbf081997b89296e9b1a6aaf4caa9e44db6b72fd37b938a8c16d728adbd057",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 38,
+      "name": "ar_allocations",
+      "sha256": "cf1370c19a05a435c878574f685438f77fa441b257155b2c971c7ed98dce7a9d",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 39,
+      "name": "ap_allocations",
+      "sha256": "ddf436d3cd16a40304f1009185e2d836489ef6c05db0bb506ab52e8b527e2bab",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 40,
+      "name": "tax_gst",
+      "sha256": "83b1203196a69d12b6faf7d1a5ecc604d7a521bb364602977bb26f7d74a01bf2",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 41,
+      "name": "accounting_steps_18_27",
+      "sha256": "1701ebec2619f083f74dee0befe8aecefe109df7448eae8d0ea945ee50c6aa05",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 42,
+      "name": "tax_permissions",
+      "sha256": "b2be6cf9e577e81f393be74854b3f32c6033a8b9690b8183761f3b8138543d9c",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 43,
+      "name": "account_types",
+      "sha256": "7dcb89b17889bc5007531c72ed1a3a4bc2d0d10cd8f95f02b36e0d155f18c149",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 44,
+      "name": "remove_type_check_constraint",
+      "sha256": "e8a0918343427a791788a177cabadcf2691ab939fc5d049cdf427ef3adaa18ed",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 45,
+      "name": "number_sequences",
+      "sha256": "b8a9d8f86aac37b6b0526a2634e7eeef3e1d9a32bffbc2b1fffec65d8c84ba30",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 56,
+      "name": "customer_bills_lifecycle",
+      "sha256": "bd5430b5b47407230d8d575924560ab1b22079a967e313905e35102abde41815",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 57,
+      "name": "customer_bills_permissions",
+      "sha256": "6b491828ed3a8ab136ec46a66b551a9cf5a62371c73ed3ca4c395a541bf1bf22",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 58,
+      "name": "step9_advanced_billing",
+      "sha256": "a5833dfdca5e7dafeca8ca3666271e6f1838035e1643e59057de750a4f24a8ac",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 59,
+      "name": "step10_payment_number",
+      "sha256": "e724ab6b3cbb6ce6a647717895ebb9e0db94c2a27f053dc6b80f70e8048ee141",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 61,
+      "name": "step11_credit_debit_note",
+      "sha256": "d001149f7148147c559ca88358eb994ae67fa8623c30c53c47149523d6579fbe",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 62,
+      "name": "step11_permissions",
+      "sha256": "598d0d474b8d72326ffd20371c4aff273a59c0a9881ff14887fb073c0915f64f",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 63,
+      "name": "step12_collection_management",
+      "sha256": "6d296e30fe5b7e0782413a057affa40ec5cb79868917bd99ead3fa23180e8eee",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 64,
+      "name": "step12_permissions",
+      "sha256": "ee994a413467ebf787992a8627e434a92b8cdf489e3e01232e04a378cca91716",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 65,
+      "name": "step14_collections_automation",
+      "sha256": "448232273a0738475d672d1fce2ab6d6845851033c3660539a9ad217c38827dc",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 66,
+      "name": "step14_permissions",
+      "sha256": "ca2c60f464aa92415146427f28ffb154289fb7a55236f8f1039c5982cb052abb",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 67,
+      "name": "step14_role_permissions",
+      "sha256": "b7a581ab43d66bae54cd166e80b499ff67f4ca1e749c23a8b4aec3406f1d0133",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 68,
+      "name": "fix_tax_input_group_and_equity_system",
+      "sha256": "3a91f6e54a94c0d4598b949aeb7ec3b44640dfdb3f9b49f6ea3819e73db3eb5c",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 70,
+      "name": "inventory_management",
+      "sha256": "96e9a20fbdb3e2ece6048800c12ce10262a8a98875de83d9815bf7a38d966b50",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 71,
+      "name": "inventory_permissions",
+      "sha256": "4e59c7375c3808df0d27b8d55d9d1b0f793970345e0bf2a9046016a0e31ca102",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 72,
+      "name": "inventory_schema",
+      "sha256": "fa7d7c42cac51a022174a3807f9a6d5ef1656ae695347d04b39fb8e3d064f1ff",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 73,
+      "name": "product_specifications",
+      "sha256": "61994884d8212636366e19982faa143a69523326d1edae5a9a01a3023da8bf47",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 74,
+      "name": "inventory_hierarchy",
+      "sha256": "880e4317dbc72ff8e0e9129e2361d3c0e8d953639422bbfb05d785b786695bac",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 75,
+      "name": "fix_inventory_serial_fk",
+      "sha256": "a9f9bc5e784f4840ba87361e757f054bc30fa175450d86bff7644a54ee68b41a",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 76,
+      "name": "stock_category_group_hierarchy",
+      "sha256": "92aad36f64c3bb813a163dd9d6df988c6716c8944abfb6475cc9508cc6d4a7cb",
+      "applied_at": "2026-09-27 16:13:44"
+    },
+    {
+      "version": 77,
+      "name": "model_stock_category_hierarchy",
+      "sha256": "c3bb6d8f87581d1b31ff3e3fa325a54e8b108308e55e9df3b26df9abd4fc0ec7",
+      "applied_at": "2026-09-27 19:38:23"
+    },
+    {
+      "version": 78,
+      "name": "alternate_units_description",
+      "sha256": "88dda770d09dad8ac991ac59e53766a187c8d9bda8797fb3f73e71f63358144e",
+      "applied_at": "2026-09-27 19:38:23"
+    },
+    {
+      "version": 79,
+      "name": "remove_soft_delete_columns",
+      "sha256": "8a6f643bc6a671f4f0dae04a80def37f642909785bf96cc3e1433df79d076463",
+      "applied_at": "2026-10-02 13:32:03"
+    },
+    {
+      "version": 80,
+      "name": "inventory_integrity_core",
+      "sha256": "5eefeaec5985d54ab9900ce27650d97e8b7d84909712f600cf35b062a99eba8a",
+      "applied_at": "2026-10-05 19:15:14"
+    }
+  ],
+  "domains": {
+    "CRM / Contacts": [
+      "contacts",
+      "contact_tags",
+      "customers",
+      "organizations"
+    ],
+    "CRM / Pipeline": [
+      "leads",
+      "deals",
+      "pipelines",
+      "pipeline_stages",
+      "activities",
+      "appointments"
+    ],
+    "CRM / Tasks & Notes": [
+      "tasks",
+      "notes",
+      "relationships",
+      "workflow_definitions",
+      "workflow_nodes",
+      "workflow_instances",
+      "workflow_executions"
+    ],
+    "Inventory / Product Master": [
+      "products",
+      "stock_items",
+      "models",
+      "brands",
+      "stock_categories",
+      "stock_groups",
+      "product_specifications",
+      "specification_templates",
+      "specification_attributes",
+      "colours",
+      "sizes",
+      "styles",
+      "select_options"
+    ],
+    "Inventory / Units & Pricing": [
+      "units_of_measure",
+      "uoms",
+      "alternate_units",
+      "compound_units",
+      "item_prices",
+      "price_levels",
+      "rate"
+    ],
+    "Inventory / Locations": [
+      "locations",
+      "inv_locations",
+      "godowns"
+    ],
+    "Inventory / Tracking": [
+      "batches",
+      "item_serials",
+      "batch_wise_stock"
+    ],
+    "Inventory / Transactions": [
+      "inventory_voucher_headers",
+      "inventory_voucher_lines",
+      "stock_ledger",
+      "physical_stock_documents",
+      "physical_stock_lines",
+      "adjustment_reasons",
+      "stock_adjustment_reasons"
+    ],
+    "Inventory / Balances & Valuation": [
+      "stock_balances",
+      "inventory_items",
+      "inventory_movements",
+      "valuation_movements"
+    ],
+    "Billing / Bills": [
+      "bills",
+      "bill_items",
+      "bill_allocations",
+      "bill_approvals",
+      "bill_events",
+      "bill_templates",
+      "recurring_bills",
+      "recurring_generation_log"
+    ],
+    "Billing / Payments": [
+      "payments",
+      "payment_plans",
+      "payment_plan_installments",
+      "payment_reconciliations",
+      "payment_reminders"
+    ],
+    "Billing / Collections": [
+      "collection_assignments",
+      "collection_activities",
+      "collection_actions",
+      "collection_action_logs",
+      "collection_escalations",
+      "collection_risk_scores",
+      "collection_rules",
+      "credit_rules",
+      "promises_to_pay",
+      "customer_disputes",
+      "customer_bill_disputes",
+      "customer_bill_audit_log",
+      "customer_bill_writeoffs",
+      "promises_to_pay"
+    ],
+    "Billing / Legacy": [
+      "invoices",
+      "invoice_line_items"
+    ],
+    "Accounting / Core": [
+      "journal_entries",
+      "journal_entry_lines",
+      "accounts",
+      "account_groups",
+      "account_types",
+      "opening_balances",
+      "opening_balance_lines"
+    ],
+    "Accounting / Receivables": [
+      "receivables",
+      "receivable_allocations",
+      "ar_reconciliation_log",
+      "customer_advances"
+    ],
+    "Accounting / Payables": [
+      "payables",
+      "payable_allocations",
+      "ap_reconciliation_log"
+    ],
+    "Accounting / Vouchers": [
+      "vouchers",
+      "expense_voucher_lines",
+      "credit_note_lines",
+      "debit_note_lines"
+    ],
+    "Accounting / Tax": [
+      "tax_masters",
+      "tax_components",
+      "tax_types",
+      "tax_account_mappings",
+      "company_tax_configs",
+      "transaction_tax_details",
+      "tax_audit_log"
+    ],
+    "Accounting / Banking & Budget": [
+      "bank_accounts",
+      "bank_reconciliations",
+      "bank_reconciliation_items",
+      "budgets",
+      "budget_lines",
+      "cost_centres",
+      "cost_categories",
+      "interest_configs",
+      "interest_rules",
+      "interest_charges",
+      "interest_calculations",
+      "year_end_closings"
+    ],
+    "Accounting / Collections & Bad Debt": [
+      "bad_debt_cases",
+      "customer_advances"
+    ],
+    "System": [
+      "companies",
+      "users",
+      "roles",
+      "permissions",
+      "role_permissions",
+      "user_roles",
+      "audit_logs",
+      "currencies",
+      "financial_years",
+      "number_sequences",
+      "system_metadata",
+      "schema_migrations",
+      "database_health_logs",
+      "legacy_tables",
+      "_payments_backup"
+    ]
+  },
+  "foreignKeys": [
+    {
+      "fromTable": "account_groups",
+      "fromColumn": "parent_id",
+      "targetTable": "account_groups",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "accounts",
+      "fromColumn": "account_group_id",
+      "targetTable": "account_groups",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "activities",
+      "fromColumn": "deal_id",
+      "targetTable": "deals",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "activities",
+      "fromColumn": "organization_id",
+      "targetTable": "organizations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "activities",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "alternate_units",
+      "fromColumn": "base_unit_id",
+      "targetTable": "units_of_measure",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "appointments",
+      "fromColumn": "assigned_to",
+      "targetTable": "users",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "appointments",
+      "fromColumn": "customer_id",
+      "targetTable": "customers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "appointments",
+      "fromColumn": "lead_id",
+      "targetTable": "leads",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "appointments",
+      "fromColumn": "deal_id",
+      "targetTable": "deals",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "appointments",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "appointments",
+      "fromColumn": "organization_id",
+      "targetTable": "organizations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "audit_logs",
+      "fromColumn": "user_id",
+      "targetTable": "users",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "bank_accounts",
+      "fromColumn": "gl_account_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "bank_reconciliation_items",
+      "fromColumn": "reconciliation_id",
+      "targetTable": "bank_reconciliations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "bank_reconciliations",
+      "fromColumn": "gl_account_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "bank_reconciliations",
+      "fromColumn": "bank_account_id",
+      "targetTable": "bank_accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "batch_wise_stock",
+      "fromColumn": "item_id",
+      "targetTable": "stock_items",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "batch_wise_stock",
+      "fromColumn": "location_id",
+      "targetTable": "locations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "batch_wise_stock",
+      "fromColumn": "godown_id",
+      "targetTable": "godowns",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "batch_wise_stock",
+      "fromColumn": "batch_id",
+      "targetTable": "batches",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "batches",
+      "fromColumn": "item_id",
+      "targetTable": "stock_items",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "bill_allocations",
+      "fromColumn": "journal_entry_id",
+      "targetTable": "journal_entries",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "bill_allocations",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "bill_approvals",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "bill_events",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "bill_items",
+      "fromColumn": "gl_account_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "bill_items",
+      "fromColumn": "product_id",
+      "targetTable": "products",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "bill_items",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "bill_items",
+      "fromColumn": "serial_id",
+      "targetTable": "item_serials",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "bill_items",
+      "fromColumn": "batch_id",
+      "targetTable": "batches",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "bill_items",
+      "fromColumn": "location_id",
+      "targetTable": "locations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "bill_items",
+      "fromColumn": "godown_id",
+      "targetTable": "godowns",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "bill_items",
+      "fromColumn": "stock_item_id",
+      "targetTable": "stock_items",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "bills",
+      "fromColumn": "deal_id",
+      "targetTable": "deals",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "bills",
+      "fromColumn": "organization_id",
+      "targetTable": "organizations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "bills",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "bills",
+      "fromColumn": "inventory_reversal_voucher_header_id",
+      "targetTable": "inventory_voucher_headers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "bills",
+      "fromColumn": "inventory_voucher_header_id",
+      "targetTable": "inventory_voucher_headers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "budget_lines",
+      "fromColumn": "cost_centre_id",
+      "targetTable": "cost_centres",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "budget_lines",
+      "fromColumn": "account_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "budget_lines",
+      "fromColumn": "budget_id",
+      "targetTable": "budgets",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "budgets",
+      "fromColumn": "financial_year_id",
+      "targetTable": "financial_years",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "collection_activities",
+      "fromColumn": "user_id",
+      "targetTable": "users",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "collection_activities",
+      "fromColumn": "assignment_id",
+      "targetTable": "collection_assignments",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "collection_activities",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "collection_activities",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "collection_assignments",
+      "fromColumn": "owner_id",
+      "targetTable": "users",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "collection_assignments",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "collection_assignments",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "compound_units",
+      "fromColumn": "base_unit_id",
+      "targetTable": "units_of_measure",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "contact_tags",
+      "fromColumn": "tag_id",
+      "targetTable": "tags",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "contact_tags",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "contacts",
+      "fromColumn": "organization_id",
+      "targetTable": "organizations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "cost_centres",
+      "fromColumn": "parent_id",
+      "targetTable": "cost_centres",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "credit_note_lines",
+      "fromColumn": "service_id",
+      "targetTable": "products",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "credit_note_lines",
+      "fromColumn": "product_id",
+      "targetTable": "products",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "credit_note_lines",
+      "fromColumn": "original_sales_invoice_id",
+      "targetTable": "vouchers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "credit_note_lines",
+      "fromColumn": "credit_note_id",
+      "targetTable": "vouchers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "credit_rules",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "customer_advances",
+      "fromColumn": "journal_entry_id",
+      "targetTable": "journal_entries",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "customer_advances",
+      "fromColumn": "organization_id",
+      "targetTable": "organizations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "customer_advances",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "customer_bill_audit_log",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "customer_bill_disputes",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "customer_bill_writeoffs",
+      "fromColumn": "journal_entry_id",
+      "targetTable": "journal_entries",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "customer_bill_writeoffs",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "customer_disputes",
+      "fromColumn": "owner_id",
+      "targetTable": "users",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "customer_disputes",
+      "fromColumn": "user_id",
+      "targetTable": "users",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "customer_disputes",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "customer_disputes",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "customers",
+      "fromColumn": "account_manager_id",
+      "targetTable": "users",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "customers",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "deals",
+      "fromColumn": "stage_id",
+      "targetTable": "pipeline_stages",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "deals",
+      "fromColumn": "pipeline_id",
+      "targetTable": "pipelines",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "deals",
+      "fromColumn": "organization_id",
+      "targetTable": "organizations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "deals",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "debit_note_lines",
+      "fromColumn": "service_id",
+      "targetTable": "products",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "debit_note_lines",
+      "fromColumn": "product_id",
+      "targetTable": "products",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "debit_note_lines",
+      "fromColumn": "original_purchase_invoice_id",
+      "targetTable": "vouchers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "debit_note_lines",
+      "fromColumn": "debit_note_id",
+      "targetTable": "vouchers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "expense_voucher_lines",
+      "fromColumn": "expense_ledger_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "expense_voucher_lines",
+      "fromColumn": "expense_voucher_id",
+      "targetTable": "vouchers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "godowns",
+      "fromColumn": "location_id",
+      "targetTable": "locations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "interest_calculations",
+      "fromColumn": "journal_entry_id",
+      "targetTable": "journal_entries",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "interest_calculations",
+      "fromColumn": "payable_id",
+      "targetTable": "payables",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "interest_calculations",
+      "fromColumn": "receivable_id",
+      "targetTable": "receivables",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "interest_calculations",
+      "fromColumn": "config_id",
+      "targetTable": "interest_configs",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "inventory_items_v2",
+      "fromColumn": "item_id",
+      "targetTable": "stock_items",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "inventory_movements",
+      "fromColumn": "journal_entry_id",
+      "targetTable": "journal_entries",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "inventory_movements",
+      "fromColumn": "voucher_id",
+      "targetTable": "vouchers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "inventory_movements",
+      "fromColumn": "product_id",
+      "targetTable": "products",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "inventory_voucher_headers",
+      "fromColumn": "accounting_journal_id",
+      "targetTable": "journal_entries",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "inventory_voucher_lines",
+      "fromColumn": "adjustment_reason_id",
+      "targetTable": "adjustment_reasons",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "inventory_voucher_lines",
+      "fromColumn": "dest_location_id",
+      "targetTable": "locations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "inventory_voucher_lines",
+      "fromColumn": "dest_godown_id",
+      "targetTable": "godowns",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "inventory_voucher_lines",
+      "fromColumn": "source_location_id",
+      "targetTable": "locations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "inventory_voucher_lines",
+      "fromColumn": "source_godown_id",
+      "targetTable": "godowns",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "inventory_voucher_lines",
+      "fromColumn": "uom_id",
+      "targetTable": "units_of_measure",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "inventory_voucher_lines",
+      "fromColumn": "batch_id",
+      "targetTable": "batches",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "inventory_voucher_lines",
+      "fromColumn": "item_id",
+      "targetTable": "stock_items",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "inventory_voucher_lines",
+      "fromColumn": "header_id",
+      "targetTable": "inventory_voucher_headers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "invoice_line_items",
+      "fromColumn": "product_id",
+      "targetTable": "products",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "invoice_line_items",
+      "fromColumn": "invoice_id",
+      "targetTable": "invoices",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "invoices",
+      "fromColumn": "deal_id",
+      "targetTable": "deals",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "invoices",
+      "fromColumn": "organization_id",
+      "targetTable": "organizations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "invoices",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "item_prices",
+      "fromColumn": "price_level_id",
+      "targetTable": "price_levels",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "item_prices",
+      "fromColumn": "item_id",
+      "targetTable": "stock_items",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "item_serials",
+      "fromColumn": "location_id",
+      "targetTable": "locations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "item_serials",
+      "fromColumn": "godown_id",
+      "targetTable": "godowns",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "item_serials",
+      "fromColumn": "batch_id",
+      "targetTable": "batches",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "item_serials",
+      "fromColumn": "item_id",
+      "targetTable": "stock_items",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "journal_entries",
+      "fromColumn": "voucher_id",
+      "targetTable": "vouchers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "journal_entries",
+      "fromColumn": "financial_year_id",
+      "targetTable": "financial_years",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION"
+    },
+    {
+      "fromTable": "journal_entry_lines",
+      "fromColumn": "cost_category_id",
+      "targetTable": "cost_categories",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "journal_entry_lines",
+      "fromColumn": "cost_centre_id",
+      "targetTable": "cost_centres",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "journal_entry_lines",
+      "fromColumn": "account_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "journal_entry_lines",
+      "fromColumn": "journal_entry_id",
+      "targetTable": "journal_entries",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "leads",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "models",
+      "fromColumn": "stock_category_id",
+      "targetTable": "stock_categories",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "models",
+      "fromColumn": "brand_id",
+      "targetTable": "brands",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "notes",
+      "fromColumn": "deal_id",
+      "targetTable": "deals",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "notes",
+      "fromColumn": "organization_id",
+      "targetTable": "organizations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "notes",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "notifications",
+      "fromColumn": "user_id",
+      "targetTable": "users",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "opening_balance_lines",
+      "fromColumn": "opening_balance_id",
+      "targetTable": "opening_balances",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "payable_allocations",
+      "fromColumn": "purchase_invoice_id",
+      "targetTable": "vouchers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "payable_allocations",
+      "fromColumn": "payment_id",
+      "targetTable": "vouchers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "payables",
+      "fromColumn": "organization_id",
+      "targetTable": "organizations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "payables",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "payables",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "payment_reminders",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "payments",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION"
+    },
+    {
+      "fromTable": "payments",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION"
+    },
+    {
+      "fromTable": "payments",
+      "fromColumn": "invoice_id",
+      "targetTable": "invoices",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION"
+    },
+    {
+      "fromTable": "payments",
+      "fromColumn": "company_id",
+      "targetTable": "companies",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION"
+    },
+    {
+      "fromTable": "physical_stock_documents",
+      "fromColumn": "location_id",
+      "targetTable": "locations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "physical_stock_documents",
+      "fromColumn": "godown_id",
+      "targetTable": "godowns",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "physical_stock_lines",
+      "fromColumn": "godown_id",
+      "targetTable": "godowns",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "physical_stock_lines",
+      "fromColumn": "location_id",
+      "targetTable": "locations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "physical_stock_lines",
+      "fromColumn": "batch_id",
+      "targetTable": "batches",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "physical_stock_lines",
+      "fromColumn": "item_id",
+      "targetTable": "stock_items",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "physical_stock_lines",
+      "fromColumn": "document_id",
+      "targetTable": "physical_stock_documents",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "product_specifications",
+      "fromColumn": "attribute_id",
+      "targetTable": "specification_attributes",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "product_specifications",
+      "fromColumn": "product_id",
+      "targetTable": "products",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "products",
+      "fromColumn": "model_id",
+      "targetTable": "models",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "products",
+      "fromColumn": "brand_id",
+      "targetTable": "brands",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "products",
+      "fromColumn": "stock_category_id",
+      "targetTable": "stock_categories",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "products",
+      "fromColumn": "stock_group_id",
+      "targetTable": "stock_groups",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "products",
+      "fromColumn": "item_group_id",
+      "targetTable": "stock_groups",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "products",
+      "fromColumn": "inventory_group_id",
+      "targetTable": "stock_groups",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "products",
+      "fromColumn": "godown_id",
+      "targetTable": "godowns",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "products",
+      "fromColumn": "location_id",
+      "targetTable": "locations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "promises_to_pay",
+      "fromColumn": "assignment_id",
+      "targetTable": "collection_assignments",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "promises_to_pay",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "promises_to_pay",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "rate",
+      "fromColumn": "item_id",
+      "targetTable": "stock_items",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "receivable_allocations",
+      "fromColumn": "credit_note_voucher_id",
+      "targetTable": "vouchers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "receivable_allocations",
+      "fromColumn": "payment_voucher_id",
+      "targetTable": "vouchers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "receivable_allocations",
+      "fromColumn": "invoice_voucher_id",
+      "targetTable": "vouchers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "receivables",
+      "fromColumn": "deal_id",
+      "targetTable": "deals",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "receivables",
+      "fromColumn": "organization_id",
+      "targetTable": "organizations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "receivables",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "receivables",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "recurring_bills",
+      "fromColumn": "last_generated_bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "recurring_bills",
+      "fromColumn": "organization_id",
+      "targetTable": "organizations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "recurring_bills",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "relationships",
+      "fromColumn": "organization_id",
+      "targetTable": "organizations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "relationships",
+      "fromColumn": "person_b_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "relationships",
+      "fromColumn": "person_a_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "role_permissions",
+      "fromColumn": "permission_id",
+      "targetTable": "permissions",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "role_permissions",
+      "fromColumn": "role_id",
+      "targetTable": "roles",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "specification_attributes",
+      "fromColumn": "template_id",
+      "targetTable": "specification_templates",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "stock_balances",
+      "fromColumn": "location_id",
+      "targetTable": "locations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "stock_balances",
+      "fromColumn": "godown_id",
+      "targetTable": "godowns",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "stock_balances",
+      "fromColumn": "batch_id",
+      "targetTable": "batches",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "stock_balances",
+      "fromColumn": "item_id",
+      "targetTable": "stock_items",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "stock_categories",
+      "fromColumn": "stock_group_id",
+      "targetTable": "stock_groups",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "stock_groups",
+      "fromColumn": "parent_group_id",
+      "targetTable": "stock_groups",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_groups",
+      "fromColumn": "location_id",
+      "targetTable": "locations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_groups",
+      "fromColumn": "godown_id",
+      "targetTable": "godowns",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "sales_account_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "purchase_account_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "opening_stock_account_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "inventory_variance_account_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "cogs_account_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "stock_asset_account_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "uom_id",
+      "targetTable": "units_of_measure",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "group_id",
+      "targetTable": "stock_groups",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "category_id",
+      "targetTable": "stock_categories",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "style_id",
+      "targetTable": "styles",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "size_id",
+      "targetTable": "sizes",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "colour_id",
+      "targetTable": "colours",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "model_id",
+      "targetTable": "models",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "brand_id",
+      "targetTable": "brands",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "product_id",
+      "targetTable": "products",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "valuation_inventory_item_id",
+      "targetTable": "inventory_items",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "item_group_id",
+      "targetTable": "stock_groups",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "inventory_group_id",
+      "targetTable": "stock_groups",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "godown_id",
+      "targetTable": "godowns",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_items",
+      "fromColumn": "location_id",
+      "targetTable": "locations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_ledger",
+      "fromColumn": "location_id",
+      "targetTable": "locations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_ledger",
+      "fromColumn": "godown_id",
+      "targetTable": "godowns",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "stock_ledger",
+      "fromColumn": "batch_id",
+      "targetTable": "batches",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "stock_ledger",
+      "fromColumn": "item_id",
+      "targetTable": "stock_items",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "stock_ledger",
+      "fromColumn": "header_id",
+      "targetTable": "inventory_voucher_headers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "tasks",
+      "fromColumn": "deal_id",
+      "targetTable": "deals",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "tasks",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "tasks",
+      "fromColumn": "organization_id",
+      "targetTable": "organizations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "tax_account_mappings",
+      "fromColumn": "ledger_account_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    },
+    {
+      "fromTable": "tax_components",
+      "fromColumn": "tax_master_id",
+      "targetTable": "tax_masters",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "transaction_tax_details",
+      "fromColumn": "tax_master_id",
+      "targetTable": "tax_masters",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "transaction_tax_details",
+      "fromColumn": "journal_entry_id",
+      "targetTable": "journal_entries",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "transaction_tax_details",
+      "fromColumn": "voucher_id",
+      "targetTable": "vouchers",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "user_roles",
+      "fromColumn": "role_id",
+      "targetTable": "roles",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "user_roles",
+      "fromColumn": "user_id",
+      "targetTable": "users",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "valuation_movements",
+      "fromColumn": "item_id",
+      "targetTable": "stock_items",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "vouchers",
+      "fromColumn": "expense_payee_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "vouchers",
+      "fromColumn": "payment_ledger_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "vouchers",
+      "fromColumn": "purchase_ledger_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "vouchers",
+      "fromColumn": "payable_ledger_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "vouchers",
+      "fromColumn": "sales_ledger_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "vouchers",
+      "fromColumn": "receiving_ledger_id",
+      "targetTable": "accounts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "vouchers",
+      "fromColumn": "journal_entry_id",
+      "targetTable": "journal_entries",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION"
+    },
+    {
+      "fromTable": "vouchers",
+      "fromColumn": "bill_id",
+      "targetTable": "bills",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "vouchers",
+      "fromColumn": "deal_id",
+      "targetTable": "deals",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "vouchers",
+      "fromColumn": "organization_id",
+      "targetTable": "organizations",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "vouchers",
+      "fromColumn": "contact_id",
+      "targetTable": "contacts",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "vouchers",
+      "fromColumn": "financial_year_id",
+      "targetTable": "financial_years",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL"
+    },
+    {
+      "fromTable": "workflow_executions",
+      "fromColumn": "instance_id",
+      "targetTable": "workflow_instances",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "workflow_instances",
+      "fromColumn": "workflow_id",
+      "targetTable": "workflow_definitions",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "workflow_nodes",
+      "fromColumn": "workflow_id",
+      "targetTable": "workflow_definitions",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE"
+    },
+    {
+      "fromTable": "year_end_closings",
+      "fromColumn": "financial_year_id",
+      "targetTable": "financial_years",
+      "targetColumn": "id",
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT"
+    }
+  ],
+  "fkViolations": [],
+  "stockLedger": {
+    "totalRows": 2,
+    "byVoucherType": [
+      {
+        "voucher_type": "opening_stock",
+        "rows": 2,
+        "qty": 2
+      }
+    ],
+    "bySourceDocument": [
+      {
+        "src": "(none)",
+        "rows": 2
+      }
+    ],
+    "columns": [
+      "id",
+      "company_id",
+      "voucher_type",
+      "voucher_number",
+      "header_id",
+      "line_number",
+      "voucher_date",
+      "item_id",
+      "batch_id",
+      "serial_number",
+      "godown_id",
+      "location_id",
+      "quantity",
+      "unit_rate",
+      "amount",
+      "reference_id",
+      "narration",
+      "posting_time",
+      "source_document_type",
+      "source_document_id",
+      "created_by"
+    ],
+    "headerVoucherTypes": [
+      "opening_stock"
+    ],
+    "headerStatuses": [
+      "posted"
+    ]
+  },
+  "stockBalance": {
+    "totalRows": 2,
+    "mismatches": [],
+    "orphanBalances": [],
+    "totals": {
+      "ledgerQty": 2,
+      "balanceQty": 2
+    }
+  },
+  "duplicates": [
+    {
+      "role": "Location master",
+      "a": {
+        "exists": true,
+        "rows": 7,
+        "columns": [
+          "id",
+          "company_id",
+          "name",
+          "code",
+          "address",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ]
+      },
+      "b": {
+        "exists": true,
+        "rows": 0,
+        "columns": [
+          "id",
+          "company_id",
+          "name",
+          "code",
+          "address",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ]
+      },
+      "fksToA": [
+        "batch_wise_stock.location_id",
+        "bill_items.location_id",
+        "godowns.location_id",
+        "inventory_voucher_lines.dest_location_id",
+        "inventory_voucher_lines.source_location_id",
+        "item_serials.location_id",
+        "physical_stock_documents.location_id",
+        "physical_stock_lines.location_id",
+        "products.location_id",
+        "stock_balances.location_id",
+        "stock_groups.location_id",
+        "stock_items.location_id",
+        "stock_ledger.location_id"
+      ],
+      "fksToB": []
+    },
+    {
+      "role": "Unit of measure master",
+      "a": {
+        "exists": true,
+        "rows": 1,
+        "columns": [
+          "id",
+          "company_id",
+          "name",
+          "symbol",
+          "decimal_places",
+          "description",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ]
+      },
+      "b": {
+        "exists": true,
+        "rows": 0,
+        "columns": [
+          "id",
+          "company_id",
+          "name",
+          "symbol",
+          "decimal_places",
+          "description",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ]
+      },
+      "fksToA": [
+        "alternate_units.base_unit_id",
+        "compound_units.base_unit_id",
+        "inventory_voucher_lines.uom_id",
+        "stock_items.uom_id"
+      ],
+      "fksToB": []
+    },
+    {
+      "role": "Inventory movement history",
+      "a": {
+        "exists": true,
+        "rows": 2,
+        "columns": [
+          "id",
+          "company_id",
+          "voucher_type",
+          "voucher_number",
+          "header_id",
+          "line_number",
+          "voucher_date",
+          "item_id",
+          "batch_id",
+          "serial_number",
+          "godown_id",
+          "location_id",
+          "quantity",
+          "unit_rate",
+          "amount",
+          "reference_id",
+          "narration",
+          "posting_time",
+          "source_document_type",
+          "source_document_id",
+          "created_by"
+        ]
+      },
+      "b": {
+        "exists": true,
+        "rows": 0,
+        "columns": [
+          "id",
+          "company_id",
+          "product_id",
+          "voucher_id",
+          "journal_entry_id",
+          "movement_type",
+          "direction",
+          "quantity",
+          "unit_cost",
+          "total_value",
+          "balance_qty",
+          "balance_value",
+          "notes",
+          "created_by",
+          "created_at"
+        ]
+      },
+      "fksToA": [],
+      "fksToB": []
+    },
+    {
+      "role": "Inventory balance",
+      "a": {
+        "exists": true,
+        "rows": 2,
+        "columns": [
+          "id",
+          "company_id",
+          "item_id",
+          "batch_id",
+          "godown_id",
+          "location_id",
+          "quantity",
+          "avg_rate",
+          "last_updated"
+        ]
+      },
+      "b": {
+        "exists": true,
+        "rows": 0,
+        "columns": [
+          "id",
+          "company_id",
+          "item_id",
+          "quantity",
+          "unit_cost",
+          "total_value",
+          "valuation_method",
+          "gl_account_id",
+          "legacy_product_id",
+          "last_inward_at",
+          "last_outward_at",
+          "updated_at",
+          "created_at"
+        ]
+      },
+      "fksToA": [],
+      "fksToB": [
+        "stock_items.valuation_inventory_item_id"
+      ]
+    },
+    {
+      "role": "Batch-level balance",
+      "a": {
+        "exists": true,
+        "rows": 2,
+        "columns": [
+          "id",
+          "company_id",
+          "item_id",
+          "batch_id",
+          "godown_id",
+          "location_id",
+          "quantity",
+          "avg_rate",
+          "last_updated"
+        ]
+      },
+      "b": {
+        "exists": true,
+        "rows": 0,
+        "columns": [
+          "id",
+          "company_id",
+          "batch_id",
+          "godown_id",
+          "location_id",
+          "item_id",
+          "quantity",
+          "avg_rate",
+          "last_updated"
+        ]
+      },
+      "fksToA": [],
+      "fksToB": []
+    },
+    {
+      "role": "Adjustment reason master",
+      "a": {
+        "exists": true,
+        "rows": 7,
+        "columns": [
+          "id",
+          "company_id",
+          "code",
+          "name",
+          "description",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "updated_by"
+        ]
+      },
+      "b": {
+        "exists": true,
+        "rows": 7,
+        "columns": [
+          "id",
+          "company_id",
+          "code",
+          "name",
+          "description",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "fksToA": [
+        "inventory_voucher_lines.adjustment_reason_id"
+      ],
+      "fksToB": []
+    },
+    {
+      "role": "Sales document",
+      "a": {
+        "exists": true,
+        "rows": 0,
+        "columns": [
+          "id",
+          "company_id",
+          "bill_number",
+          "bill_type",
+          "contact_id",
+          "organization_id",
+          "deal_id",
+          "currency",
+          "status",
+          "issue_date",
+          "due_date",
+          "subtotal",
+          "tax",
+          "discount",
+          "total",
+          "paid_amount",
+          "balance",
+          "reference_number",
+          "notes",
+          "terms",
+          "created_at",
+          "updated_at",
+          "created_by",
+          "invoice_number",
+          "customer_gstin",
+          "billing_address",
+          "shipping_address",
+          "place_of_supply",
+          "customer_po_number",
+          "customer_po_date",
+          "salesperson_id",
+          "sales_channel",
+          "payment_terms",
+          "price_list_id",
+          "branch_id",
+          "warehouse_id",
+          "project_id",
+          "cost_centre_id",
+          "is_tax_inclusive",
+          "round_off",
+          "other_charges",
+          "discount_amount",
+          "taxable_amount",
+          "tax_master_id",
+          "is_interstate",
+          "company_state",
+          "salesperson_name",
+          "cgst_amount",
+          "sgst_amount",
+          "igst_amount",
+          "cgst_rate",
+          "sgst_rate",
+          "igst_rate",
+          "journal_entry_id",
+          "approved_by",
+          "approved_at",
+          "posted_by",
+          "posted_at",
+          "cancelled_by",
+          "cancelled_at",
+          "cancellation_reason",
+          "reversal_journal_entry_id",
+          "idempotency_key",
+          "payment_terms_days",
+          "due_date_calc",
+          "other_charges_taxable",
+          "other_charges_tax_amount",
+          "line_discount_amount",
+          "inventory_voucher_header_id",
+          "inventory_reversal_voucher_header_id"
+        ]
+      },
+      "b": {
+        "exists": true,
+        "rows": 0,
+        "columns": [
+          "id",
+          "company_id",
+          "invoice_number",
+          "contact_id",
+          "organization_id",
+          "deal_id",
+          "status",
+          "issue_date",
+          "due_date",
+          "subtotal",
+          "tax",
+          "discount",
+          "total",
+          "paid_amount",
+          "balance",
+          "notes",
+          "terms",
+          "created_at",
+          "updated_at",
+          "currency"
+        ]
+      },
+      "fksToA": [
+        "bill_allocations.bill_id",
+        "bill_approvals.bill_id",
+        "bill_events.bill_id",
+        "bill_items.bill_id",
+        "collection_activities.bill_id",
+        "collection_assignments.bill_id",
+        "customer_bill_audit_log.bill_id",
+        "customer_bill_disputes.bill_id",
+        "customer_bill_writeoffs.bill_id",
+        "customer_disputes.bill_id",
+        "payables.bill_id",
+        "payment_reminders.bill_id",
+        "payments.bill_id",
+        "promises_to_pay.bill_id",
+        "receivables.bill_id",
+        "recurring_bills.last_generated_bill_id",
+        "vouchers.bill_id"
+      ],
+      "fksToB": [
+        "invoice_line_items.invoice_id",
+        "payments.invoice_id"
+      ]
+    }
+  ],
+  "integrityFindings": [
+    {
+      "severity": "MEDIUM",
+      "area": "Inventory linkage",
+      "detail": "3 stock item(s) belong to a product not flagged is_inventory_managed",
+      "rows": [
+        {
+          "id": "stoc_01M45J9T7WYA73ZV6PSVE44DQ6",
+          "sku": "E2E-FIX-1791188330716"
+        },
+        {
+          "id": "stoc_01M45JAQN1RM600B5753H65EBD",
+          "sku": "3025"
+        },
+        {
+          "id": "stoc_01M45JH71JE0XTYA2828SF6EXM",
+          "sku": "00020"
+        }
+      ]
+    }
+  ]
+}

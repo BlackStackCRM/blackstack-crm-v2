@@ -1,0 +1,11 @@
+CREATE INDEX IF NOT EXISTS idx_leads_contact ON leads(contact_id);
+CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(lead_status);
+CREATE INDEX IF NOT EXISTS idx_leads_company ON leads(company_id);
+CREATE INDEX IF NOT EXISTS idx_customers_contact ON customers(contact_id);
+CREATE INDEX IF NOT EXISTS idx_customers_company ON customers(company_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_contact ON appointments(contact_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_deal ON appointments(deal_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_start ON appointments(start_time);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_workflow_nodes_workflow ON workflow_nodes(workflow_id);

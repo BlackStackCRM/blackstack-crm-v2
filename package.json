@@ -1,0 +1,97 @@
+{
+  "name": "blackstack-crm-v2",
+  "version": "1.0.0",
+  "description": "BlackStack CRM V2 - Full-stack CRM application",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "node server/app.js",
+    "dev": "nodemon server/app.js",
+    "electron:dev": "electron .",
+    "electron:build": "electron-builder --win nsis",
+    "electron:build:win": "electron-builder --win nsis --publish never",
+    "electron:build:phase-d": "node scripts/phase-d-build.js",
+    "electron:build:prod": "node scripts/require-signing.js && electron-builder --win nsis --publish never -c.win.forceCodeSigning=true",
+    "release:hash": "node scripts/release-hash.js",
+    "release:verify-installer": "node scripts/verify-installer.js",
+    "acceptance:installer": "node tests/installer-data-preservation.mjs",
+    "launcher": "node launcher/app.js",
+    "launcher:dev": "nodemon launcher/app.js",
+    "migrate": "node server/database/migrate.js",
+    "seed": "node server/database/seed.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint server/ public/js/",
+    "format": "prettier --write \"**/*.{js,json,md}\"",
+    "test:architecture": "vitest run tests/architecture-retired-tables.test.js",
+    "test:release": "node scripts/release-gate.js",
+    "test:e2e": "node scripts/run-e2e-full.js",
+    "test:e2e:ci": "node -e \"process.env.E2E_HEADLESS='true';require('./scripts/run-e2e-full.js')\"",
+    "test:e2e:targeted": "node scripts/run-e2e-full.js --grep"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "electron-updater": "^6.8.9",
+    "express": "^4.21.1",
+    "express-rate-limit": "^7.4.1",
+    "express-validator": "^7.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "ulid": "^2.3.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "nodemon": "^3.1.7",
+    "playwright": "^1.63.0",
+    "prettier": "^3.3.3",
+    "puppeteer": "^25.10.0",
+    "vitest": "^2.1.6"
+  },
+  "build": {
+    "appId": "com.blackstack.crm",
+    "productName": "BlackStack CRM",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**",
+      "server/**",
+      "public/**",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BlackStack CRM",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "BlackStackCRM",
+        "repo": "blackstack-crm-v2"
+      }
+    ]
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

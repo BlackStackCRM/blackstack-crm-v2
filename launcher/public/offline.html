@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+  <meta http-equiv="Pragma" content="no-cache"/>
+  <meta http-equiv="Expires" content="0"/>
+  <meta content="BlackStack CRM V2 - Server Offline" name="description"/>
+  <title>BlackStack CRM - Server Offline</title>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'primary': '#000000',
+            'on-primary': '#ffffff',
+            'primary-container': '#1c1b1b',
+            'on-primary-container': '#858383',
+            'primary-fixed': '#e5e2e1',
+            'primary-fixed-dim': '#c8c6c5',
+            'on-primary-fixed': '#1c1b1b',
+            'on-primary-fixed-variant': '#474746',
+            'inverse-primary': '#c8c6c5',
+            'secondary': '#0058be',
+            'on-secondary': '#ffffff',
+            'secondary-container': '#2170e4',
+            'on-secondary-container': '#fefcff',
+            'secondary-fixed': '#d8e2ff',
+            'secondary-fixed-dim': '#adc6ff',
+            'on-secondary-fixed': '#001a42',
+            'on-secondary-fixed-variant': '#004395',
+            'tertiary': '#000000',
+            'on-tertiary': '#ffffff',
+            'tertiary-container': '#1c1b1a',
+            'on-tertiary-container': '#868382',
+            'tertiary-fixed': '#e6e2df',
+            'tertiary-fixed-dim': '#cac6c4',
+            'on-tertiary-fixed': '#1c1b1a',
+            'on-tertiary-fixed-variant': '#484645',
+            'error': '#ba1a1a',
+            'on-error': '#ffffff',
+            'error-container': '#ffdad6',
+            'on-error-container': '#93000a',
+            'background': '#fdf8f8',
+            'on-background': '#1c1b1b',
+            'surface': '#fdf8f8',
+            'on-surface': '#1c1b1b',
+            'surface-variant': '#e5e2e1',
+            'on-surface-variant': '#444748',
+            'surface-container': '#f1edec',
+            'surface-container-low': '#f7f3f2',
+            'surface-container-high': '#ebe7e6',
+            'surface-container-highest': '#e5e2e1',
+            'surface-container-lowest': '#ffffff',
+            'surface-bright': '#fdf8f8',
+            'surface-dim': '#ddd9d8',
+            'surface-tint': '#5f5e5e',
+            'inverse-surface': '#313030',
+            'inverse-on-surface': '#f4f0ef',
+            'outline': '#747878',
+            'outline-variant': '#c4c7c7',
+          },
+          borderRadius: {
+            'DEFAULT': '0.125rem',
+            'lg': '0.25rem',
+            'xl': '0.5rem',
+            'full': '0.75rem',
+          },
+          spacing: {
+            'stack-sm': '8px',
+            'stack-md': '16px',
+            'stack-lg': '32px',
+            'container-padding': '24px',
+            'gutter': '16px',
+            'unit': '4px',
+          },
+          fontFamily: {
+            'body': ['Inter', 'sans-serif'],
+            'display': ['Inter', 'sans-serif'],
+          },
+          fontSize: {
+            'body-sm': ['12px', { lineHeight: '16px' }],
+            'body-md': ['14px', { lineHeight: '20px' }],
+            'label-md': ['12px', { lineHeight: '16px', letterSpacing: '0.5px' }],
+            'h3': ['18px', { lineHeight: '24px', letterSpacing: '-0.3px' }],
+            'h1': ['28px', { lineHeight: '36px', letterSpacing: '-0.6px' }],
+            'display': ['32px', { lineHeight: '40px', letterSpacing: '-0.8px' }],
+          },
+        }
+      }
+    }
+  </script>
+  <style>
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .animate-fade-in { animation: fadeIn 0.35s ease-out forwards; }
+    .animate-pulse-slow { animation: pulse 2s ease-in-out infinite; }
+  
+    /* Step animation for server startup */
+    #loading-steps .step-item {
+      opacity: 0.4;
+      transition: opacity 0.3s, color 0.3s;
+    }
+    #loading-steps .step-item.active {
+      opacity: 1;
+      color: var(--on-secondary-container, #1d2836);
+    }
+    #loading-steps .step-item.completed {
+      opacity: 0.9;
+      color: var(--secondary, #4a90d9);
+    }
+    #loading-steps .step-item.completed .step-icon {
+      color: var(--secondary, #4a90d9);
+    }
+    
+  </style>
+</head>
+<body class="bg-background font-body-md text-on-background antialiased">
+  <div class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+    <div class="absolute -top-[20%] -right-[10%] w-[60%] h-[80%] rounded-full bg-secondary opacity-5 blur-3xl pointer-events-none"></div>
+    <div class="absolute top-[40%] -left-[20%] w-[40%] h-[60%] rounded-full bg-primary opacity-5 blur-3xl pointer-events-none"></div>
+
+    <div id="card" class="w-full max-w-md relative z-10 transition-all duration-300">
+      <div class="bg-surface-container-lowest rounded-xl shadow-sm p-container-padding border border-outline-variant/30">
+
+        <!-- Logo + Title -->
+        <div class="flex flex-col items-center mb-stack-lg">
+          <div class="w-10 h-10 bg-primary flex items-center justify-center rounded-lg mb-stack-md">
+            <span class="material-symbols-outlined text-on-primary text-[24px]">token</span>
+          </div>
+          <h1 class="font-display text-display text-on-surface text-center">BlackStack CRM</h1>
+        </div>
+
+        <!-- Server Status Indicator -->
+        <div id="status-indicator" class="flex items-center justify-center gap-stack-sm py-4 border border-outline-variant rounded-lg bg-surface-container-low/50 mb-stack-md">
+          <span id="status-dot" class="w-3 h-3 rounded-full bg-error animate-pulse-slow"></span>
+          <span id="status-text" class="font-body-sm text-body-sm text-on-surface-variant">Server Status: Stopped</span>
+        </div>
+
+        <!-- Error Message (hidden by default) -->
+        <div id="error-message" class="hidden mb-stack-md">
+          <div class="flex items-start gap-2 p-3 bg-error-container/10 border border-error/20 rounded-lg">
+            <span class="material-symbols-outlined text-error text-[18px] shrink-0 mt-0.5">error</span>
+            <p id="error-text" class="font-body-sm text-body-sm text-on-error-container flex-1"></p>
+          </div>
+        </div>
+
+        <!-- Start / Loading / Retry Content -->
+        <div id="content-start" class="text-center">
+          <div class="mb-stack-md">
+            <span class="material-symbols-outlined text-[48px] text-on-surface-variant/30">dns</span>
+          </div>
+          <p class="font-body-sm text-body-sm text-on-surface-variant text-center mb-stack-md">
+            The CRM server is currently stopped.<br/>
+            The CRM cannot be loaded until the server is started.
+          </p>
+          <button id="start-btn" class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-primary text-on-primary font-label-md text-label-md uppercase tracking-wider hover:bg-primary/90 transition-colors shadow-sm">
+            <span id="start-btn-icon" class="material-symbols-outlined text-[18px]">play_arrow</span>
+            <span>Start CRM Server</span>
+          </button>
+        </div>
+
+        <div id="content-loading" class="hidden text-center">
+          <div class="mb-stack-md">
+            <span class="material-symbols-outlined text-[48px] text-secondary animate-spin">progress_activity</span>
+          </div>
+          <p class="font-body-sm text-body-sm text-on-surface-variant text-center mb-stack-md">
+            Starting CRM Server...
+          </p>
+          <div class="flex flex-col items-center gap-2 mb-stack-md">
+            <div id="loading-steps" class="flex flex-col w-full gap-1.5">
+              <div class="step-item flex items-center gap-2 text-sm text-on-surface-variant" data-step="1">
+                <span class="material-symbols-outlined text-[16px] step-icon">schedule</span>
+                <span class="step-label">Starting CRM Server</span>
+              </div>
+              <div class="step-item flex items-center gap-2 text-sm text-on-surface-variant" data-step="2">
+                <span class="material-symbols-outlined text-[16px] step-icon">schedule</span>
+                <span class="step-label">Initializing services</span>
+              </div>
+              <div class="step-item flex items-center gap-2 text-sm text-on-surface-variant" data-step="3">
+                <span class="material-symbols-outlined text-[16px] step-icon">schedule</span>
+                <span class="step-label">Connecting to database</span>
+              </div>
+              <div class="step-item flex items-center gap-2 text-sm text-on-surface-variant" data-step="4">
+                <span class="material-symbols-outlined text-[16px] step-icon">schedule</span>
+                <span class="step-label">Starting API</span>
+              </div>
+              <div class="step-item flex items-center gap-2 text-sm text-on-surface-variant" data-step="5">
+                <span class="material-symbols-outlined text-[16px] step-icon">schedule</span>
+                <span class="step-label">CRM is ready</span>
+              </div>
+            </div>
+          </div>
+          <div class="w-full bg-surface-container-high rounded-full h-2 overflow-hidden">
+            <div id="loading-bar" class="h-full bg-secondary rounded-full animate-pulse-slow" style="width: 60%"></div>
+          </div>
+        </div>
+
+        <div id="content-ready" class="hidden text-center">
+          <div class="mb-stack-md">
+            <span class="material-symbols-outlined text-[40px] text-secondary">check_circle</span>
+          </div>
+          <p class="font-body-sm text-body-sm text-on-surface-variant text-center mb-stack-md">
+            CRM Server is now online!<br/>
+            Redirecting to dashboard...
+          </p>
+        </div>
+
+        <div id="content-retry" class="hidden text-center">
+          <p class="font-body-sm text-body-sm text-on-surface-variant text-center mb-stack-md">
+            The server could not be started.
+          </p>
+          <button id="retry-btn" class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-secondary text-on-secondary font-label-md text-label-md uppercase tracking-wider hover:bg-secondary/90 transition-colors shadow-sm">
+            <span id="retry-btn-icon" class="material-symbols-outlined text-[18px]">refresh</span>
+            <span>Retry</span>
+          </button>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-stack-md pt-stack-md border-t border-outline-variant">
+          <p class="font-body-sm text-body-sm text-on-surface-variant/60">
+            BlackStack CRM V2 — Server Launcher
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var API_BASE = '/api/launcher';
+      var POLL_INTERVAL = 1500;
+      var POLL_MAX = 40;   // ~60 seconds max polling (40 * 1500ms)
+
+      var startBtn = document.getElementById('start-btn');
+      var retryBtn = document.getElementById('retry-btn');
+      var contentStart = document.getElementById('content-start');
+      var contentLoading = document.getElementById('content-loading');
+      var contentReady = document.getElementById('content-ready');
+      var contentRetry = document.getElementById('content-retry');
+      var errorMessage = document.getElementById('error-message');
+      var errorText = document.getElementById('error-text');
+      var statusDot = document.getElementById('status-dot');
+      var statusText = document.getElementById('status-text');
+      var loadingBar = document.getElementById('loading-bar');
+      var startBtnIcon = document.getElementById('start-btn-icon');
+
+      function showContent(el) {
+        [contentStart, contentLoading, contentReady, contentRetry].forEach(function (c) {
+          c.classList.add('hidden');
+        });
+        if (el) el.classList.remove('hidden');
+      }
+
+      function showError(msg) {
+        errorText.textContent = msg;
+        errorMessage.classList.remove('hidden');
+      }
+
+      function hideError() {
+        errorMessage.classList.add('hidden');
+        errorText.textContent = '';
+      }
+
+      function setStartButtonState(loading) {
+        startBtn.disabled = loading;
+        startBtnIcon.textContent = loading ? 'progress_activity' : 'play_arrow';
+        if (loading) {
+          startBtn.classList.add('opacity-50', 'cursor-not-allowed');
+          startBtn.querySelector('span:last-child').textContent = 'Starting...';
+        } else {
+          startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+          startBtn.querySelector('span:last-child').textContent = 'Start CRM Server';
+        }
+      }
+
+      function setServerStatus(state, label) {
+        statusText.textContent = label || 'Server Status: ' + (state === 'online' ? 'Running' :
+          state === 'starting' ? 'Starting...' :
+          state === 'error' ? 'Error' : 'Stopped');
+        if (state === 'online') {
+          statusDot.className = 'w-3 h-3 rounded-full bg-secondary';
+        } else if (state === 'starting') {
+          statusDot.className = 'w-3 h-3 rounded-full bg-secondary animate-pulse-slow';
+        } else {
+          statusDot.className = 'w-3 h-3 rounded-full bg-error animate-pulse-slow';
+        }
+      }
+
+      // Check if CRM is actually online and serving on port 3000.
+      // NOTE: We cannot rely on res.ok alone because the launcher serves the
+      // offline HTML page with a 200 status when the CRM is not yet ready.
+      // The CRM's /health endpoint returns JSON { success: true, data: { status: 'ok' } },
+      // so we verify the Content-Type and body to distinguish the real CRM response
+      // from the offline page HTML fallback.
+      async function checkCrmOnline() {
+        try {
+          var res = await fetch('/health', { cache: 'no-store' });
+          if (!res.ok) return false;
+          var contentType = res.headers.get('content-type') || '';
+          if (!contentType.includes('application/json')) return false;
+          var body = await res.json();
+          return body && body.success === true && body.data && body.data.status === 'ok';
+        } catch (e) {
+          return false;
+        }
+      }
+
+      async function fetchStatus() {
+        try {
+          var res = await fetch(API_BASE + '/status');
+          if (!res.ok) throw new Error('Status request failed');
+          var data = await res.json();
+          return data.data;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      async function startServer() {
+        setStartButtonState(true);
+        hideError();
+        showContent(contentLoading);
+        setServerStatus('starting', 'Starting CRM Server...');
+
+        try {
+          var res = await fetch(API_BASE + '/start', { method: 'POST' });
+          var data = await res.json();
+          var crmState = data.data.state;
+
+          if (crmState === 'online' || crmState === 'starting') {
+            pollForCrmReady();
+          } else {
+            showError('Unexpected response from launcher: ' + JSON.stringify(data));
+            setServerStatus('error', 'Startup Failed');
+            showContent(contentRetry);
+            setStartButtonState(false);
+          }
+        } catch (e) {
+          showError('Failed to start CRM server: ' + e.message);
+          setServerStatus('error', 'Startup Failed');
+          showContent(contentRetry);
+          setStartButtonState(false);
+        }
+      }
+
+      function animateLoadingBar() {
+        var widths = [30, 50, 70, 85, 95];
+        var i = 0;
+        function step() {
+          if (i < widths.length) {
+            loadingBar.style.width = widths[i] + '%';
+            i++;
+            setTimeout(step, 1000);
+          }
+        }
+        step();
+      }
+
+      // Animate loading steps progressively
+      function animateSteps() {
+        var steps = document.querySelectorAll("#loading-steps .step-item");
+        if (!steps.length) return;
+        var stepWidth = 100 / steps.length;
+        var currentStep = 0;
+        function next() {
+          if (currentStep >= steps.length) return;
+          steps[currentStep].classList.add("active");
+          if (currentStep > 0) steps[currentStep - 1].classList.add("completed");
+          loadingBar.style.width = ((currentStep + 1) * stepWidth) + "%";
+          currentStep++;
+          setTimeout(next, 1000);
+        }
+        next();
+      }
+
+      async function pollForCrmReady() {
+        showContent(contentLoading);
+        animateLoadingBar();
+        animateSteps();
+        var attempts = 0;
+
+        var poll = async function () {
+          attempts++;
+
+          // First check if the CRM is actually serving on port 3000
+          var crmOnline = await checkCrmOnline();
+          if (crmOnline) {
+            setServerStatus('online', 'CRM Server is Online');
+            showContent(contentReady);
+            setTimeout(function () {
+              window.location.replace('http://localhost:3000/?t=' + Date.now() + '#dashboard');
+            }, 1500);
+            return;
+          }
+
+          // Also check launcher-reported state for better error messages
+          var status = await fetchStatus();
+          if (status) {
+            setServerStatus(status.crmState, 'Server Status: ' +
+              (status.crmState === 'online' ? 'Running' :
+               status.crmState === 'starting' ? 'Starting...' :
+               status.crmState === 'error' ? 'Error' : 'Stopped'));
+          }
+
+          if (status && status.crmState === 'error' && status.error) {
+            showError(status.error);
+            setServerStatus('error', 'Startup Failed');
+            showContent(contentRetry);
+            setStartButtonState(false);
+            return;
+          }
+
+          if (attempts >= POLL_MAX) {
+            showError('The CRM server did not start within the expected time (60s). Check server logs for details.');
+            setServerStatus('error', 'Timeout');
+            showContent(contentRetry);
+            setStartButtonState(false);
+            return;
+          }
+
+          setTimeout(poll, POLL_INTERVAL);
+        };
+
+        poll();
+      }
+
+      // --- Event Listeners ---
+      startBtn.addEventListener('click', function () {
+        startServer();
+      });
+
+      retryBtn.addEventListener('click', function () {
+        startServer();
+      });
+
+      // --- Initial load: check if CRM is already running ---
+      (async function init() {
+        hideError();
+
+        // First, try to reach the CRM directly (it's behind the launcher proxy).
+        // If it's already online, the launcher would have redirected us already,
+        // but this is a safety check in case the server was started manually.
+        var crmOnline = await checkCrmOnline();
+        if (crmOnline) {
+          // CRM is running — redirect to dashboard
+          window.location.replace('http://localhost:3000/?t=' + Date.now() + '#dashboard');
+          return;
+        }
+
+        // CRM is not running. Show the offline page.
+        setServerStatus('offline', 'Server Status: Stopped');
+        showContent(contentStart);
+
+        // Also fetch launcher status for display
+        var status = await fetchStatus();
+        if (status && status.crmState === 'starting') {
+          // Someone else may have started it; monitor
+          setServerStatus('starting', 'Starting CRM Server...');
+          showContent(contentLoading);
+          animateLoadingBar();
+          animateSteps();
+          pollForCrmReady();
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>

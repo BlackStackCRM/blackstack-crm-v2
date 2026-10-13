@@ -1,0 +1,414 @@
+{
+  "generatedAt": "2026-10-06T03:33:55.045Z",
+  "baseUrl": "http://localhost:3000",
+  "headless": false,
+  "slowMo": 150,
+  "testDatabase": "D:\\Work\\Projects\\blackstack\\CB CRM V2\\blackstack-crm-v2\\data\\regression-test\\regression-e2e.db",
+  "results": [
+    {
+      "test": "Application Load",
+      "status": "PASS",
+      "detail": "login + dashboard rendered"
+    },
+    {
+      "test": "Contacts",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Leads",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Customers",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Organizations",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Deals",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Tasks",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Appointments",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Notes",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Products",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Invoices",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Payments",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Receivables",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Customer Bills",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Accounting / Journal",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Chart of Accounts",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Report: Valuation",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Report: Batch Stock",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Report: Godown Stock",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Report: Location Stock",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Report: Expiry",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Report: Serial",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Location hierarchy returns locations",
+      "status": "PASS",
+      "detail": "2 location(s) — was 0 before the fix"
+    },
+    {
+      "test": "Hierarchy summary counts locations",
+      "status": "PASS",
+      "detail": "locations=7 — was 0 before the fix"
+    },
+    {
+      "test": "Location fix: locations",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"items\":[{\"id\":\"loca_01M45H846VHQBD3WXJVM3YV3JD\",\"companyId\":\"default"
+    },
+    {
+      "test": "Location fix: masters/locations",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"items\":[{\"id\":\"loca_01M45H846VHQBD3WXJVM3YV3JD\",\"companyId\":\"default"
+    },
+    {
+      "test": "Location fix: masters/godowns",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"items\":[{\"id\":\"godo_01M45ZTATV2JP0ZZ4ZX12TMVMK\",\"companyId\":\"default"
+    },
+    {
+      "test": "Location fix: reports/location-stock",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"items\":[{\"id\":\"loca_01H56AD98678F3394ECB93331944\",\"locationName\":\"Ba"
+    },
+    {
+      "test": "Location fix: reports/godown-stock",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"items\":[{\"id\":\"godo_01M45H90HCHHEYK90G81DH4EJR\",\"name\":\"MVP-GD-1\",\"c"
+    },
+    {
+      "test": "accounting/inventory/items",
+      "status": "PASS",
+      "detail": "HTTP 200 — 500 / no-such-column gone"
+    },
+    {
+      "test": "accounting/inventory/movements",
+      "status": "PASS",
+      "detail": "HTTP 200 — 500 / no-such-column gone"
+    },
+    {
+      "test": "accounting/inventory/valuation",
+      "status": "PASS",
+      "detail": "HTTP 200 — 500 / no-such-column gone"
+    },
+    {
+      "test": "customer-bills/reports/branch-warehouse?group_by=warehouse",
+      "status": "PASS",
+      "detail": "HTTP 200 — 500 / no-such-column gone"
+    },
+    {
+      "test": "Inventory dashboard cards render",
+      "status": "PASS",
+      "detail": "24 card(s) rendered; SECTIONS config declares 24 (stale >=25 assertion in tests/inventory.e2e.test.js is test debt, not a regression)"
+    },
+    {
+      "test": "Location master shows rows",
+      "status": "PASS",
+      "detail": "7 row(s)"
+    },
+    {
+      "test": "Product form opens with fields",
+      "status": "WARN",
+      "detail": "could not locate an add control"
+    },
+    {
+      "test": "Product list persists after reload",
+      "status": "PASS",
+      "detail": "6 row(s) (was 6)"
+    },
+    {
+      "test": "API stockItems",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"items\":[{\"id\":\"stoc_01M45JH71JE0XTYA2828SF6EXM\",\"companyId\":\"default\",\"name\":\""
+    },
+    {
+      "test": "API godowns",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"items\":[{\"id\":\"godo_01M45ZTATV2JP0ZZ4ZX12TMVMK\",\"companyId\":\"default\",\"name\":\""
+    },
+    {
+      "test": "API locations",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"items\":[{\"id\":\"loca_01M45H846VHQBD3WXJVM3YV3JD\",\"companyId\":\"default\",\"name\":\""
+    },
+    {
+      "test": "API uoms",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"items\":[{\"id\":\"unit_default\",\"companyId\":\"default\",\"name\":\"Unit\",\"symbol\":\"uni"
+    },
+    {
+      "test": "API batches",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"items\":[{\"id\":\"batc_01M47M8PMF8R6AM9SZ6J9RAP7T\",\"companyId\":\"default\",\"itemId\""
+    },
+    {
+      "test": "API vouchers",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"items\":[{\"id\":\"ivh_01M47M8PNKCGYHD4M3RPZ4P5DM\",\"companyId\":\"default\",\"voucherT"
+    },
+    {
+      "test": "API bills",
+      "status": "PASS",
+      "detail": "HTTP 200 {\"success\":true,\"data\":{\"items\":[],\"pagination\":{\"total\":0,\"page\":1,\"limit\":50,\""
+    },
+    {
+      "test": "Customer Bills UI renders",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "test": "Bill UI shows inventory fields",
+      "status": "PASS",
+      "detail": "6/6 product(s) flagged is_inventory_managed after backfill"
+    },
+    {
+      "test": "Bill create + submit + approve",
+      "status": "PASS",
+      "detail": "bill bill_01M47MCNRRMYM6SWYDHDVJQACN"
+    },
+    {
+      "test": "Bill POST moves stock",
+      "status": "PASS",
+      "detail": "stock 100 -> 99 (status POSTED)"
+    },
+    {
+      "test": "Bill POST returns POSTED",
+      "status": "PASS",
+      "detail": "status=POSTED"
+    },
+    {
+      "test": "Bill CANCEL restores stock",
+      "status": "PASS",
+      "detail": "stock 99 -> 100 (original was 100)"
+    },
+    {
+      "test": "Batch-tracked: POST reduces stock",
+      "status": "PASS",
+      "detail": "stock 100 -> 99 (serial TEST-BATCH-001)"
+    },
+    {
+      "test": "Batch-tracked: bill reaches POSTED",
+      "status": "PASS",
+      "detail": "status=POSTED"
+    },
+    {
+      "test": "Batch-tracked: CANCEL restores stock",
+      "status": "PASS",
+      "detail": "stock 99 -> 100 (original 100)"
+    },
+    {
+      "test": "Batch: batch balance changed",
+      "status": "PASS",
+      "detail": "batch TEST-BATCH-001 balance 100 -> 99"
+    },
+    {
+      "test": "Batch: CANCEL restores batch balance",
+      "status": "PASS",
+      "detail": "batch balance 99 -> 100 (original 100)"
+    },
+    {
+      "test": "Serial: save blocked without a serial",
+      "status": "PASS",
+      "detail": "rejected with HTTP 400"
+    },
+    {
+      "test": "Serial-tracked: POST reduces stock",
+      "status": "PASS",
+      "detail": "stock 2 -> 1 (serial TEST-SERIAL-001)"
+    },
+    {
+      "test": "Serial-tracked: bill reaches POSTED",
+      "status": "PASS",
+      "detail": "status=POSTED"
+    },
+    {
+      "test": "Serial-tracked: CANCEL restores stock",
+      "status": "PASS",
+      "detail": "stock 1 -> 2 (original 2)"
+    },
+    {
+      "test": "Serial: consumed on post",
+      "status": "PASS",
+      "detail": "TEST-SERIAL-001 -> sold"
+    },
+    {
+      "test": "Serial: available again after cancel",
+      "status": "PASS",
+      "detail": "TEST-SERIAL-001 -> available"
+    },
+    {
+      "test": "Stock vouchers endpoint reachable",
+      "status": "PASS",
+      "detail": "HTTP 200"
+    },
+    {
+      "test": "Isolated DB integrity_check",
+      "status": "PASS",
+      "detail": "ok"
+    },
+    {
+      "test": "Isolated DB FK violations",
+      "status": "PASS",
+      "detail": "0 violation(s)"
+    },
+    {
+      "test": "Isolated DB ledger vs balances",
+      "status": "PASS",
+      "detail": "0 mismatches — derived cache agrees with the ledger"
+    },
+    {
+      "test": "Isolated DB orphan balances",
+      "status": "PASS",
+      "detail": "0 orphan row(s)"
+    },
+    {
+      "test": "Ledger: original bill rows preserved",
+      "status": "PASS",
+      "detail": "3 CUSTOMER_BILL row(s) still present (never deleted)"
+    },
+    {
+      "test": "Ledger: reversal rows appended",
+      "status": "PASS",
+      "detail": "3 CUSTOMER_BILL_REVERSAL row(s)"
+    }
+  ],
+  "consoleErrors": [
+    {
+      "url": "http://localhost:3000/login.html",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    },
+    {
+      "url": "http://localhost:3000/index.html#customer-bills",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    }
+  ],
+  "pageErrors": [],
+  "networkErrors": [
+    {
+      "status": 400,
+      "method": "POST",
+      "url": "http://localhost:3000/api/customer-bills/bill_01M47MCP59K215B46PAK1JSWC8/post",
+      "body": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Bill line \\\"Test Serial Product\\\" (TEST-SERIAL-001) is serial-tracked, so 1 serial number(s) must be selected.\",\"stack\":\"ValidationError:"
+    }
+  ],
+  "liveBefore": {
+    "products": 3,
+    "stock_items": 3,
+    "locations": 7,
+    "godowns": 2,
+    "units_of_measure": 1,
+    "stock_ledger": 2,
+    "stock_balances": 2,
+    "bills": 0,
+    "payments": 0,
+    "vouchers": 25,
+    "journal_entries": 25,
+    "journal_entry_lines": 102,
+    "contacts": 1,
+    "leads": 0,
+    "deals": 0,
+    "tasks": 0,
+    "accounts": 24,
+    "organizations": 1,
+    "inventory_items": 0,
+    "valuation_movements": 0
+  },
+  "liveAfter": {
+    "products": 3,
+    "stock_items": 3,
+    "locations": 7,
+    "godowns": 2,
+    "units_of_measure": 1,
+    "stock_ledger": 2,
+    "stock_balances": 2,
+    "bills": 0,
+    "payments": 0,
+    "vouchers": 25,
+    "journal_entries": 25,
+    "journal_entry_lines": 102,
+    "contacts": 1,
+    "leads": 0,
+    "deals": 0,
+    "tasks": 0,
+    "accounts": 24,
+    "organizations": 1,
+    "inventory_items": 0,
+    "valuation_movements": 0
+  },
+  "liveDbDrift": [],
+  "screenshots": "D:\\Work\\Projects\\blackstack\\CB CRM V2\\blackstack-crm-v2\\test-results-regression"
+}

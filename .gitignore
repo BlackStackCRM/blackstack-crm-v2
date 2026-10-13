@@ -1,0 +1,34 @@
+node_modules/
+dist/
+build/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.env
+.env.local
+.env.*.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+coverage/
+.nyc_output/
+_token.txt
+
+# Phase 1: user data (never part of app package/updates)
+user-data/
+# Agent private state (plans, skills) - do not commit
+.hermes/
+
+# Zero-byte placeholder file (purpose unknown)
+nul
+
+# Backup database files (never commit)
+backups/

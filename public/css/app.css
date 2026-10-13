@@ -1,0 +1,135 @@
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    overscroll-behavior: none;
+  }
+  main>:first-child {
+    margin-top: 0 !important;
+  }
+  main>:last-child {
+    margin-bottom: 0 !important;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer components {
+  /* Premium navigation item styling for Inventory page */
+  .nav-item {
+    transition: all 0.2s ease-in-out;
+  }
+  .nav-item:hover {
+    transform: translateX(2px);
+  }
+  .nav-item:focus-within {
+    outline: 2px solid var(--tw-ring-color, theme(colors.secondary.light));
+    outline-offset: 2px;
+  }
+  
+  /* Section header styling */
+  .inventory-section-title {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  
+  /* Card styling for backup mode */
+  .inv-card {
+    transition: all 0.2s ease-in-out;
+  }
+  .inv-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px theme(colors.gray.200 / 0.3);
+  }
+  
+  /* Tab button active state */
+  .tab-btn.active {
+    color: theme(colors.secondary.DEFAULT);
+    border-color: theme(colors.secondary.DEFAULT);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@animate-fade-in {
+  animation: fadeIn 0.35s ease-out forwards;
+}
+
+@animate-slide-in {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+@animate-scale-in {
+  animation: scaleIn 0.25s ease-out forwards;
+}
+
+@animate-slide-in-right {
+  animation: slideInRight 0.25s ease-out forwards;
+}
+
+@tailwind utilities;
+
+/* Custom scroll bar styling for sections */
+.inventory-sections {
+  scrollbar-width: thin;
+  scrollbar-color: theme(colors.gray.300) theme(colors.gray.100);
+}
+.inventory-sections::-webkit-scrollbar {
+  width: 8px;
+}
+.inventory-sections::-webkit-scrollbar-track {
+  background: theme(colors.gray.100);
+  border-radius: 4px;
+}
+.inventory-sections::-webkit-scrollbar-thumb {
+  background: theme(colors.gray.300);
+  border-radius: 4px;
+}
+
+@media print {
+  body {
+    background: #fff !important;
+  }
+  #sidebar, #topbar, .no-print {
+    display: none !important;
+  }
+  #main-content {
+    margin-left: 0 !important;
+    padding: 0 !important;
+  }
+  .print-break-inside-avoid {
+    break-inside: avoid;
+  }
+  a {
+    text-decoration: none;
+    color: #000 !important;
+  }
+}

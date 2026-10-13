@@ -1,0 +1,15 @@
+CREATE TABLE IF NOT EXISTS products (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  category TEXT,
+  sku TEXT UNIQUE,
+  price REAL DEFAULT 0.0,
+  cost REAL DEFAULT 0.0,
+  tax_rate REAL DEFAULT 0.0,
+  is_service INTEGER DEFAULT 0,
+  is_active INTEGER DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
