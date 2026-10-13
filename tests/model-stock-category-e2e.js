@@ -22,13 +22,29 @@ const TEST_ID = Date.now().toString().slice(-6);
 // Helper: clean up via DB directly (bypass UI for reliability)
 function cleanupDB() {
   const db = new DatabaseSync(DB_PATH);
-  const prefix = `E2E-MCAT-${TEST_ID}`;
-  db.prepare(`DELETE FROM models WHERE name LIKE '${prefix}%'`).run();
-  db.prepare(`DELETE FROM stock_categories WHERE name LIKE 'E2E-CAT-${TEST_ID}%' OR name LIKE 'E2E-CAT2-${TEST_ID}%'`).run();
-  db.prepare(`DELETE FROM stock_groups WHERE name LIKE 'E2E-GRP-${TEST_ID}%'`).run();
-  db.prepare(`DELETE FROM brands WHERE name LIKE '${prefix}%'`).run();
-  db.prepare(`DELETE FROM stock_items WHERE name LIKE '${prefix}%' OR sku LIKE '${prefix}%'`).run();
-  db.prepare(`DELETE FROM stock_balances WHERE item_id NOT IN (SELECT id FROM stock_items)`).run();
+  const groupIdPrefix = `E2E-GRP-${TEST_ID}`;
+  const categoryPrefix = `E2E-CAT-${TEST_ID}`;
+  const categoryPrefix2 = `E2E-CAT2-${TEST_ID}`;
+  const modelPrefix = `E2E-MOD-${TEST_ID}`;
+  const brandPrefix = `E2E-MCAT-${TEST_ID}`;
+
+  // Delete only records created by this test run.
+  // All test-created records use unique TEST_ID-scoped prefixes:
+  //   - stock_groups: E2E-GRP-*
+  //   - stock_categories: E2E-CAT-*, E2E-CAT2-*
+  //   - models: E2E-MOD-*
+  //   - brands: E2E-MCAT-* (if any were created)
+  db.prepare(`DELETE FROM models WHERE name LIKE '${modelPrefix}%'`).run();
+  db.prepare(`DELETE FROM stock_categories WHERE name LIKE '${categoryPrefix}%' OR name LIKE '${categoryPrefix2}%'`).run();
+  db.prepare(`DELETE FROM stock_groups WHERE name LIKE '${groupIdPrefix}%'`).run();
+  db.prepare(`DELETE FROM brands WHERE name LIKE '${brandPrefix}%'`).run();
+
+  // NOTE: stock_items and stock_balances are NOT created by this test.
+  // The test creates stock_groups, stock_categories, and models only.
+  // The old broad query "DELETE FROM stock_balances WHERE item_id NOT IN
+  // (SELECT id FROM stock_items)" is removed because it deletes ALL
+  // stock_balances rows that reference non-existent items — including
+  // seed data. No test records are created in those tables here.
   console.log('[INFO] DB cleanup complete');
   db.close();
 }
@@ -136,19 +152,23 @@ const assert = (cond, msg) => {
 
   db.close();
 
-  // ─── Step 3: Navigate to Models — verify Stock Category dropdown ───
-  console.log('\n[STEP 4] Navigating to Models page');
+  // ─── Step 3: Navigate to Models (ModelPage) ───
+  // The 'models' card key resolves to the ModelPage in inventory-sub.js,
+  // reached via '#inventory/models'.
+  console.log('\n[STEP 4] Navigating to Models (ModelPage) page');
   await page.evaluate(() => window.location.hash = '#inventory/models');
   await page.waitForTimeout(2000);
 
-  // Open the Create Model form
+  // Open the Create Model form (ModelPage uses #inv-master-form)
   await page.click('#inv-master-new');
   await page.waitForTimeout(1500);
   console.log('[PASS] Create Model form opened');
+  await page.screenshot({ path: 'public/screenshots/model-form-opened.png' });
 
-  // Verify Stock Category dropdown exists and is required
+  // Verify Stock Category dropdown exists and is required (Model form)
   const catSelect = await page.$('#inv-master-form select[name="stock_category_id"]');
   assert(!!catSelect, 'Stock Category dropdown is present in Model form');
+  await page.screenshot({ path: 'public/screenshots/model-form-opened-with-dropdown.png' });
 
   // Verify the select has the "required" attribute
   const isRequired = await catSelect.evaluate(el => el.required);
@@ -164,7 +184,18 @@ const assert = (cond, msg) => {
   }, 'E2E-CAT-' + TEST_ID);
   assert(categoryVisible, 'Created Stock Category appears in dropdown');
 
-  // ─── Step 4: Attempt to create Model without selecting Stock Category ───
+  // ─── Verify the Brand dropdown exists (model form requires Brand) ───
+  const brandSelect = await page.$('#inv-master-form select[name="brand_id"]');
+  assert(!!brandSelect, 'Brand dropdown is present in Model form');
+  console.log('[PASS] Brand dropdown is present');
+
+  // Select a brand (must select, service requires brand_id for models)
+  // Use a brand from seed data (brand_001 = 'Generic')
+  await page.selectOption('#inv-master-form select[name="brand_id"]', { value: 'brand_001' });
+  await page.waitForTimeout(500);
+  console.log('[PASS] Brand selected (brand_001)');
+  await page.screenshot({ path: 'public/screenshots/model-form-with-brand.png' });
+  // ─── Step 5: Attempt to create Model WITHOUT Stock Category ───
   console.log('\n[STEP 5] Attempting to create Model WITHOUT Stock Category');
   await page.fill('#inv-master-form input[name="name"]', 'E2E-MOD-' + TEST_ID + '-NOCAT');
   await page.click('#inv-master-form button[type="submit"]');
