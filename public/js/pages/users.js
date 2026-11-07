@@ -108,6 +108,7 @@ renderTable(container, items, total) {
         <button data-act="reset" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-surface-container text-left"><span class="material-symbols-outlined text-[18px]">lock_reset</span> Reset password</button>
         <button data-act="toggle" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-surface-container text-left"><span class="material-symbols-outlined text-[18px]">${row.status === 'ACTIVE' ? 'block' : 'check_circle'}</span> ${row.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}</button>
         <button data-act="delete" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-error-container/20 text-error text-left"><span class="material-symbols-outlined text-[18px]">delete</span> Delete</button>
+        ${String(row.role || '').toUpperCase() === 'AGENCY_ADMIN' ? '<button data-act="delete-permanent" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-error-container/20 text-error text-left"><span class="material-symbols-outlined text-[18px]">delete_forever</span> Permanently delete agency account</button>' : ''}
       </div>`,
     });
     modal.open();
@@ -119,6 +120,7 @@ renderTable(container, items, total) {
       if (act === 'reset') return this.resetPassword(row);
       if (act === 'toggle') return this.toggleStatus(row);
       if (act === 'delete') return this.confirmDelete(row);
+      if (act === 'delete-permanent') return this.confirmPermanentDelete(row);
     });
   },
 
@@ -227,5 +229,15 @@ renderTable(container, items, total) {
       Toast.success('User deleted');
       this.load();
     } catch (err) { Toast.error(err.message || 'Failed'); }
+  },
+
+  async confirmPermanentDelete(row) {
+    const label = row.fullName || row.firstName || row.lastName || row.email;
+    if (!confirm(`Permanently delete agency administrator ${label}? This removes the login from Supabase Auth and SQLite. This cannot be undone.`)) return;
+    try {
+      await API.del(`/users/${encodeURIComponent(row.id)}/permanent`);
+      Toast.success('Agency administrator permanently deleted');
+      this.load();
+    } catch (err) { Toast.error(err.message || 'Could not permanently delete this agency administrator'); }
   },
 };

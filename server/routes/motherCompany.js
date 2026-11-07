@@ -25,7 +25,7 @@ const { AgencyService } = require('../services/agency.service');
 // router the only endpoint shape in the API, so it uses the shared helpers.
 const { successResponse } = require('../utils/response');
 const { getConn } = require('../utils/db');
-const { ValidationError } = require('../utils/errors');
+const { ValidationError, AppError } = require('../utils/errors');
 const { PasswordService } = require('../auth/password');
 
 const router = express.Router();
@@ -315,83 +315,76 @@ router.post('/agencies/:id/administrators',
           agency = localByCode;
         }
       }
-      const administrator = await service.assignAdministrator(localAgencyId, {
-        email,
-        fullName,
-        username,
-        password,
-        actor: req.user,
-        providerCompanyId: req.user.companyId,
-        req,
-        agency,
-      });
+      const normalizedEmail = String(email || '').trim().toLowerCase();
+      const existingLocal = service.db.get('SELECT id, status FROM users WHERE lower(trim(email)) = ?', [normalizedEmail]);
+      const existingLink = existingLocal && service.db.get(
+        'SELECT id, agency_id, status FROM agency_administrators WHERE user_id = ?', [existingLocal.id],
+      );
+      const { isConfigured, getSupabaseClient } = require('../config/supabase');
+      const { ensureAgencyAuthUser, findAuthUserByEmail } = require('../services/agency-admin-auth');
+      const sb = isConfigured() ? getSupabaseClient() : null;
+      const authMatch = sb ? await findAuthUserByEmail(sb, normalizedEmail) : null;
+      if (existingLink && existingLink.agency_id !== localAgencyId) {
+        throw new AppError('This account is already linked to another agency.', 'CONFLICT', 409);
+      }
+      if (existingLink && String(existingLink.status).toUpperCase() === 'ACTIVE'
+        && String(existingLocal.status).toUpperCase() === 'ACTIVE') {
+        throw new AppError('This user is already an active administrator for this agency.', 'CONFLICT', 409);
+      }
 
-      // FIX (MC-assign flow, task 1): Supabase auth identity for the admin.
-      // createNew = a fresh local user (create the auth user + profiles row);
-      // linked = an existing ACTIVE local user was granted the admin role
-      // (update their auth password to the one-time credential, set
-      // must_change_password, mirror app_metadata) — never a raw createUser
-      // failure on an existing email.
+      let identity = null;
+      if (sb) {
+        identity = await ensureAgencyAuthUser(sb, {
+          email: normalizedEmail,
+          username,
+          password,
+          agencyId: (agency && agency.id) || localAgencyId,
+          existingUser: authMatch,
+        });
+      }
+
+      let administrator;
       try {
-        const { isConfigured, getSupabaseClient } = require('../config/supabase');
-        if (isConfigured()) {
-          const sb = getSupabaseClient();
-          const localUser = service.db.get('SELECT id, email, supabase_user_id FROM users WHERE email = ?', [String(email).trim().toLowerCase()]);
-          const synthesizedEmail = `${(username || fullName || 'admin').toString().trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')}.${Date.now()}@accounts.blackstack.local`;
-          const authEmail = (localUser && localUser.email && !localUser.email.endsWith('@accounts.blackstack.local'))
-            ? localUser.email
-            : synthesizedEmail;
-          const { data: existingAuth } = await sb.auth.admin.listUsers();
-          const match = (existingAuth && existingAuth.users || []).find(
-            (u) => (u.email || '').toLowerCase() === String(authEmail).toLowerCase());
-          if (match) {
-            // EXISTING auth user: reset credential to the one-time password +
-            // force change on first login, and mirror app_metadata.
-            await sb.auth.admin.updateUserById(match.id, {
-              password,
-              app_metadata: { role: 'agency', agency_id: (agency && agency.id) || localAgencyId },
+        administrator = await service.assignAdministrator(localAgencyId, {
+          email: normalizedEmail,
+          fullName,
+          username,
+          password,
+          actor: req.user,
+          providerCompanyId: req.user.companyId,
+          req,
+          agency,
+          supabaseUserId: identity && identity.user.id,
+        });
+      } catch (assignError) {
+        if (identity && identity.created && sb) {
+          const { error: cleanupError } = await sb.auth.admin.deleteUser(identity.user.id);
+          if (cleanupError && cleanupError.code !== 'user_not_found') {
+            console.error('[mother-company] failed to roll back new Auth identity after local assign failure', {
+              authUserId: identity.user.id,
+              code: cleanupError.code || 'unknown',
             });
-            await sb.from('profiles').upsert({
-              user_id: match.id,
-              username: (username || email).toString().trim().toLowerCase(),
-              role: 'agency',
-              agency_id: (agency && agency.id) || localAgencyId,
-              parent_user_id: null,
-              must_change_password: true,
-              is_active: true,
-            }, { onConflict: 'user_id' });
-            if (localUser && !localUser.supabase_user_id) {
-              service.db.run('UPDATE users SET supabase_user_id = ?, must_change_password = 1 WHERE id = ?', [match.id, localUser.id]);
-            }
-            console.log('[mother-company] existing auth user linked to agency', { email: authEmail, agencyId: localAgencyId });
-          } else {
-            // NEW auth user: create with app_metadata (server-set only).
-            const { data: created, error: createErr } = await sb.auth.admin.createUser({
-              email: authEmail,
-              password,
-              email_confirm: true,
-              app_metadata: { role: 'agency', agency_id: (agency && agency.id) || localAgencyId, parent_user_id: null },
-            });
-            if (createErr) throw createErr;
-            const { error: profErr } = await sb.from('profiles').upsert({
-              user_id: created.user.id,
-              username: (username || email).toString().trim().toLowerCase(),
-              role: 'agency',
-              agency_id: (agency && agency.id) || localAgencyId,
-              parent_user_id: null,
-              must_change_password: true,
-              is_active: true,
-            }, { onConflict: 'user_id' });
-            if (profErr) console.error('[mother-company] profiles mirror failed:', profErr.message);
-            if (localUser && !localUser.supabase_user_id) {
-              service.db.run('UPDATE users SET supabase_user_id = ?, must_change_password = 1 WHERE id = ?', [created.user.id, localUser.id]);
-            }
           }
         }
-      } catch (cloudErr) {
-        // Best-effort: the local assignment is authoritative; a cloud identity
-        // failure must not roll back the operator's action.
-        console.error('[mother-company] Supabase admin identity sync failed:', cloudErr instanceof Error ? cloudErr.message : String(cloudErr));
+        throw assignError;
+      }
+
+      if (identity && sb) {
+        const { error: profileError } = await sb.from('profiles').upsert({
+          user_id: identity.user.id,
+          username: String(username || normalizedEmail).trim().toLowerCase(),
+          role: 'agency',
+          agency_id: (agency && agency.id) || localAgencyId,
+          parent_user_id: null,
+          must_change_password: true,
+          is_active: true,
+        }, { onConflict: 'user_id' });
+        if (profileError) {
+          console.error('[mother-company] linked Auth identity has pending profile sync', {
+            authUserId: identity.user.id,
+            code: profileError.code || 'unknown',
+          });
+        }
       }
 
       try {

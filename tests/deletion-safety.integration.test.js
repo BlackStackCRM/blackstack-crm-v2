@@ -9,6 +9,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'bscrm-del-'));
 const DB_PATH = path.join(TMP_DIR, 'test.db');
+const USER_DATA_DIR = path.join(TMP_DIR, 'user-data');
 const PORT = 3600 + Math.floor(Math.random() * 300);
 const BASE = `http://127.0.0.1:${PORT}`;
 let serverProc, token;
@@ -52,9 +53,13 @@ async function analyze(entity_type, entity_id) {
 }
 
 beforeAll(async () => {
-  spawnSync(process.execPath, [path.join(ROOT, 'server', 'database', 'migrate.js')], { encoding: 'utf8', env: { ...process.env, DB_PATH }, timeout: 60000 });
-  spawnSync(process.execPath, [path.join(ROOT, 'server', 'database', 'seed.js')], { encoding: 'utf8', env: { ...process.env, DB_PATH, DEMO_MODE: 'true' }, timeout: 60000 });
-  serverProc = spawn(process.execPath, [path.join(ROOT, 'server', 'app.js')], { env: { ...process.env, DB_PATH, PORT: String(PORT), NODE_ENV: 'test' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  fs.mkdirSync(USER_DATA_DIR, { recursive: true });
+  const isolatedEnv = { ...process.env, DB_PATH, BLACKSTACK_USER_DATA_DIR: USER_DATA_DIR };
+  const migration = spawnSync(process.execPath, [path.join(ROOT, 'server', 'database', 'migrate.js')], { encoding: 'utf8', env: isolatedEnv, timeout: 60000 });
+  if (migration.status !== 0) throw new Error(`Test DB migration failed: ${migration.stderr || migration.stdout}`);
+  const seed = spawnSync(process.execPath, [path.join(ROOT, 'server', 'database', 'seed.js')], { encoding: 'utf8', env: { ...isolatedEnv, DEMO_MODE: 'true' }, timeout: 60000 });
+  if (seed.status !== 0) throw new Error(`Test DB seed failed: ${seed.stderr || seed.stdout}`);
+  serverProc = spawn(process.execPath, [path.join(ROOT, 'server', 'app.js')], { env: { ...isolatedEnv, PORT: String(PORT), NODE_ENV: 'test' }, stdio: ['ignore', 'pipe', 'pipe'] });
   serverProc.stderr.on('data', d => process.stderr.write('[server] ' + d));
   await waitReady();
   token = await login();

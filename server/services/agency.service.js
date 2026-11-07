@@ -21,7 +21,7 @@
  *     not reachable from that company.
  */
 
-const { ValidationError, NotFoundError } = require('../utils/errors');
+const { ValidationError, NotFoundError, AppError } = require('../utils/errors');
 const { generateId } = require('../utils/generateId');
 const { PasswordService } = require('../auth/password');
 const { forwardAgencyToCloud } = require('../services/supabase.service');
@@ -655,7 +655,7 @@ class AgencyService {
    * established by the Mother Company operator, and the account is inactive
    * until they set it.
    */
-  async assignAdministrator(agencyId, { email, fullName, password, username, actor, providerCompanyId, req, agency }) {
+  async assignAdministrator(agencyId, { email, fullName, password, username, actor, providerCompanyId, req, agency, supabaseUserId }) {
     if (!agency) {
       try {
         agency = this.getForCompany(agencyId, providerCompanyId);
@@ -766,16 +766,16 @@ class AgencyService {
       //     explicitly chose this email, so linking is the intended action;
       //     the one-time password still forces a credential set.
       const existing = this.db.get(
-        'SELECT id, status, company_id, role FROM users WHERE email = ?',
+        'SELECT id, status, company_id, role FROM users WHERE lower(trim(email)) = lower(?)',
         [mail],
       );
       let userId;
-      let linkedExistingUser = false;
       if (existing && existing.status === 'INACTIVE') {
         userId = existing.id;
         this.db.run(
-          `UPDATE users SET status='ACTIVE', password_hash=?, full_name=?, company_id=?, hierarchy_role=COALESCE(hierarchy_role, 'agency'), updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-          [passwordHash, String(fullName).trim(), agency.company_id, userId],
+          `UPDATE users SET status='ACTIVE', password_hash=?, full_name=?, company_id=?, hierarchy_role=COALESCE(hierarchy_role, 'agency'),
+             supabase_user_id=COALESCE(?,supabase_user_id), updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+          [passwordHash, String(fullName).trim(), agency.company_id, supabaseUserId || null, userId],
         );
       } else if (existing) {
         const alreadyHere = this.db.get(
@@ -783,7 +783,7 @@ class AgencyService {
           [existing.id, agencyId],
         );
         if (alreadyHere) {
-          throw new ValidationError('User is already an administrator for this agency.');
+          throw new AppError('This user is already an administrator for this agency.', 'CONFLICT', 409);
         }
         const elsewhere = this.db.get(
           "SELECT id FROM agency_administrators WHERE user_id = ?",
@@ -803,17 +803,17 @@ class AgencyService {
         // hierarchy_role is the authority column for access decisions
         // (resolveCaller reads it); users.role is kept in sync for consistency.
         userId = existing.id;
-        linkedExistingUser = true;
         this.db.run(
           `UPDATE users SET status='ACTIVE', password_hash=?, full_name=?, company_id=?,
-             role='AGENCY_ADMIN', hierarchy_role='agency', must_change_password=1, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-          [passwordHash, String(fullName).trim(), agency.company_id, userId],
+             role='AGENCY_ADMIN', hierarchy_role='agency', must_change_password=1,
+             supabase_user_id=COALESCE(?,supabase_user_id), updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+          [passwordHash, String(fullName).trim(), agency.company_id, supabaseUserId || null, userId],
         );
       } else {
         userId = generateId('usr');
         this.db.run(
-          `INSERT INTO users (id, company_id, username, email, password_hash, full_name, role, status)
-           VALUES (?,?,?,?,?,?,?,?)`,
+          `INSERT INTO users (id, company_id, username, email, password_hash, full_name, role, status, supabase_user_id)
+           VALUES (?,?,?,?,?,?,?,?,?)`,
           [
             userId,
             agency.company_id,
@@ -824,6 +824,7 @@ class AgencyService {
             String(fullName).trim(),
             'USER',
             'ACTIVE',
+            supabaseUserId || null,
           ],
         );
       }
@@ -852,7 +853,7 @@ class AgencyService {
           throw conflict;
         }
         if (existingLink.status !== 'REVOKED') {
-          throw new ValidationError('User is already an administrator for this agency.');
+          throw new AppError('This user is already an administrator for this agency.', 'CONFLICT', 409);
         }
         linkId = existingLink.id;
         this.db.run(

@@ -14,7 +14,7 @@
  *   - Cross-tenant access is reported as NOT FOUND, never 403 (no existence leak).
  */
 
-const { ValidationError, NotFoundError, AuthorizationError } = require('../utils/errors');
+const { ValidationError, NotFoundError, AuthorizationError, AppError } = require('../utils/errors');
 const { generateId } = require('../utils/generateId');
 const { getSupabaseClient } = require('../config/supabase');
 const { forwardAgencyToCloud, localIdToCloudUuid } = require('../services/supabase.service');
@@ -613,79 +613,283 @@ class AgencyControlService {
       } catch {}
     }
     if (!agency) throw new NotFoundError('Agency', agencyId);
-    
-    // FIX (audit F5, §3.4): duplicate admin check BEFORE any insert — the old
-    // code hit the users.email / users.username UNIQUE constraints raw and
-    // surfaced a 500 instead of a field-level validation error.
-    const dup = this.db.get('SELECT id FROM users WHERE LOWER(email) = LOWER(?) OR username = ? LIMIT 1', [email, username]);
-    if (dup) {
-      throw new ValidationError('Admin validation failed.', { email: 'A user with this email/username already exists.' });
+    if (!isLocal) throw new AppError('Agency must be synchronized to local storage before assigning an administrator.', 'AGENCY_SYNC_REQUIRED', 409);
+    const clean = {
+      fullName: String(fullName || '').trim(),
+      email: String(email || '').trim().toLowerCase(),
+      username: String(username || '').trim(),
+      password: String(password || ''),
+    };
+    const missing = {};
+    if (!clean.fullName) missing.fullName = 'Full name is required.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean.email)) missing.email = 'A valid email address is required.';
+    if (!clean.username) missing.username = 'Username is required.';
+    if (clean.password.length < 10) missing.password = 'Password must be at least 10 characters.';
+    if (Object.keys(missing).length) throw new ValidationError('Admin validation failed.', missing);
+
+    const localUser = this.db.get('SELECT * FROM users WHERE lower(trim(email)) = lower(?)', [clean.email]);
+    const usernameOwner = this.db.get('SELECT id, email FROM users WHERE lower(username) = lower(?)', [clean.username]);
+    const existingLink = localUser && this.db.get(
+      'SELECT id, agency_id, status FROM agency_administrators WHERE user_id = ?', [localUser.id],
+    );
+    const { isConfigured, getSupabaseClient } = require('../config/supabase');
+    const supabase = isConfigured() ? getSupabaseClient() : null;
+    const { ensureAgencyAuthUser, findAuthUserByEmail } = require('./agency-admin-auth');
+    const authMatch = supabase ? await findAuthUserByEmail(supabase, clean.email) : null;
+    if (usernameOwner && (!localUser || usernameOwner.id !== localUser.id)) {
+      throw new AppError('That username is already assigned to another user.', 'CONFLICT', 409);
+    }
+    if (existingLink && existingLink.agency_id !== agencyId) {
+      throw new AppError('This account is already linked to another agency.', 'CONFLICT', 409);
+    }
+    if (localUser && String(localUser.status).toUpperCase() === 'ACTIVE'
+      && existingLink && String(existingLink.status).toUpperCase() === 'ACTIVE') {
+      throw new AppError('This user is already an active administrator for this agency.', 'CONFLICT', 409);
     }
 
-    // FIX (audit F5): company stub guard. The rebuilt version assumed
-    // 'company_' + agencyId exists; for legacy agencies (created before the
-    // rebuild, or via other flows) it doesn't — the users insert then fails
-    // the FK to companies. INSERT OR IGNORE makes the tenant stub idempotent.
-    const companyId = 'company_' + agencyId;
+    let authUser = null;
+    let authCreated = false;
+    if (supabase) {
+      const identity = await ensureAgencyAuthUser(supabase, {
+        email: clean.email, username: clean.username, password: clean.password,
+        agencyId: localIdToCloudUuid(agencyId) || agencyId,
+        existingUser: authMatch,
+      });
+      authUser = identity.user;
+      authCreated = identity.created;
+    }
+
+    const companyId = agency.company_id || ('company_' + agencyId);
     this.db.run(
       "INSERT OR IGNORE INTO companies (id, name, status) VALUES (?, ?, 'ACTIVE')",
       [companyId, agency ? (agency.name || agencyId) : agencyId],
     );
 
     const adminId = generateId('aa');
-    const newUserId = generateId('usr');
-    const passwordHash = await require('../auth/password').PasswordService.hash(password || '');
-
-    if (isLocal) {
-      // 1. Insert new User into local SQLite. The pre-check above catches the
-      // common case, but a raw UNIQUE error can still escape (a concurrent
-      // insert between check and write, or case/whitespace variants the
-      // pre-check's exact-match misses — e.g. trailing space stored in a legacy
-      // row). Map it to the field-level validation error instead of a raw 500.
-      try {
-        this.db.run(
-          `INSERT INTO users (id, company_id, username, email, password_hash, full_name, role, status, created_at)
-           VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)`,
-          [newUserId, companyId, username, email, passwordHash, fullName, 'AGENCY_ADMIN', 'ACTIVE']
-        );
-      } catch (insertErr) {
-        const msg = insertErr && insertErr.message ? insertErr.message : String(insertErr);
-        if (/UNIQUE constraint failed: users\.(email|username)/i.test(msg)) {
-          throw new ValidationError('Admin validation failed.', { email: 'A user with this email/username already exists.' });
-        }
-        throw insertErr;
-      }
-      // 2. Insert Agency Admin link
-      // FIX (audit F5): role_code was 'ADMIN' while users.role was
-      // 'AGENCY_ADMIN' — the two disagreed, breaking role-scoped queries.
-      // Both now use the documented AGENCY_ADMIN code.
-      this.db.run(
-        `INSERT INTO agency_administrators (id, agency_id, user_id, company_id, role_code, assigned_by, assigned_at, status)
-         VALUES (?,?,?,?,?,?,CURRENT_TIMESTAMP,'ACTIVE')`,
-        [adminId, agencyId, newUserId, companyId, 'AGENCY_ADMIN', userId]
-      );
-    }
-    
-    // 3. Sync to Supabase
+    const assignedAdminId = existingLink ? existingLink.id : adminId;
+    const userIdForAdmin = localUser ? localUser.id : generateId('usr');
+    const passwordHash = await require('../auth/password').PasswordService.hash(clean.password);
     try {
-      const sb = getSupabaseClient();
-      if (sb) {
+      this.db.transaction(() => {
+        if (localUser) {
+          this.db.run(
+            `UPDATE users SET company_id=?, username=?, password_hash=?, full_name=?, role='AGENCY_ADMIN',
+               status='ACTIVE', hierarchy_role='agency', must_change_password=1,
+               supabase_user_id=COALESCE(?, supabase_user_id), updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+            [companyId, clean.username, passwordHash, clean.fullName, authUser && authUser.id, userIdForAdmin],
+          );
+        } else {
+          this.db.run(
+            `INSERT INTO users (id, company_id, username, email, password_hash, full_name, role, status,
+                                hierarchy_role, must_change_password, supabase_user_id, created_at)
+             VALUES (?,?,?,?,?,?,?,'ACTIVE','agency',1,?,CURRENT_TIMESTAMP)`,
+            [userIdForAdmin, companyId, clean.username, clean.email, passwordHash, clean.fullName, 'AGENCY_ADMIN', authUser && authUser.id],
+          );
+        }
+        if (existingLink) {
+          this.db.run(
+            `UPDATE agency_administrators SET status='ACTIVE', revoked_at=NULL, revoked_by=NULL,
+               assigned_by=?, assigned_at=CURRENT_TIMESTAMP WHERE id=?`,
+            [userId, existingLink.id],
+          );
+        } else {
+          this.db.run(
+            `INSERT INTO agency_administrators (id, agency_id, user_id, company_id, role_code, assigned_by, assigned_at, status)
+             VALUES (?,?,?,?,?,?,CURRENT_TIMESTAMP,'ACTIVE')`,
+            [adminId, agencyId, userIdForAdmin, companyId, 'AGENCY_ADMIN', userId],
+          );
+        }
+      })();
+    } catch (error) {
+      if (authCreated && authUser && supabase) {
+        const { error: rollbackError } = await supabase.auth.admin.deleteUser(authUser.id);
+        if (rollbackError && rollbackError.code !== 'user_not_found') {
+          console.error('[agency-admin] created Auth identity needs cleanup after local transaction failure', { authUserId: authUser.id, code: rollbackError.code || 'unknown' });
+        }
+      }
+      const msg = String(error && error.message || error);
+      if (/UNIQUE constraint failed: users\.(email|username)/i.test(msg)) {
+        throw new AppError('A user with this email or username is already assigned.', 'CONFLICT', 409);
+      }
+      throw error;
+    }
+
+    if (supabase && authUser) {
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        user_id: authUser.id,
+        username: clean.username.toLowerCase(),
+        role: 'agency',
+        agency_id: localIdToCloudUuid(agencyId) || agencyId,
+        must_change_password: true,
+        is_active: true,
+      }, { onConflict: 'user_id' });
+      if (profileError) console.error('[agency-admin] profile mirror sync failed', { authUserId: authUser.id, code: profileError.code || 'unknown' });
+    }
+
+    // Mirror the local assignment to the public agency table when configured.
+    try {
+      if (supabase) {
         const cloudAgencyId = localIdToCloudUuid(agencyId) || agencyId;
-        await sb.from('agency_administrators').upsert([{
-          id: adminId,
+        const { error } = await supabase.from('agency_administrators').upsert([{
+          id: localIdToCloudUuid(assignedAdminId),
           agency_id: cloudAgencyId,
-          full_name: fullName,
-          email,
-          username,
-          password_hash: passwordHash,
+          company_id: localIdToCloudUuid(companyId),
+          user_id: authUser && authUser.id,
+          role_code: 'AGENCY_ADMIN',
+          assigned_by: localIdToCloudUuid(userId),
           status: 'ACTIVE',
         }], { onConflict: 'id' });
+        if (error) console.error('[agency-admin] public mirror sync failed', { adminId: assignedAdminId, code: error.code || 'unknown' });
       }
     } catch (syncErr) {
-      console.error('Cloud sync exception:', syncErr.message);
+      console.error('[agency-admin] public mirror sync exception', { adminId: assignedAdminId, message: syncErr.message });
     }
     
-    return { id: adminId, agencyId, fullName, email, username };
+    return { id: assignedAdminId, agencyId, fullName: clean.fullName, email: clean.email, username: clean.username };
+  }
+
+  async permanentlyDeleteAdministrator(actorUserId, adminLinkId) {
+    const link = this.db.get(
+      `SELECT aa.id AS admin_id, aa.agency_id, aa.user_id, u.email, u.supabase_user_id,
+              u.role AS user_role
+       FROM agency_administrators aa JOIN users u ON u.id = aa.user_id
+       WHERE aa.id = ?`,
+      [adminLinkId],
+    );
+    if (!link) throw new NotFoundError('Agency administrator', adminLinkId);
+
+    const isPlatformAdmin = Boolean(this.db.get(
+      `SELECT 1 AS ok FROM users u
+       LEFT JOIN user_roles ur ON ur.user_id = u.id
+       WHERE u.id = ? AND (upper(u.role) = 'ADMIN' OR ur.role_id = 'role_admin') LIMIT 1`,
+      [actorUserId],
+    ));
+    const owner = this.db.get(
+      `SELECT aa.agency_id AS owner_agency_id
+       FROM agency_administrators aa
+       WHERE aa.user_id = ? AND aa.status = 'ACTIVE' LIMIT 1`,
+      [actorUserId],
+    );
+    const ownsAgency = owner && (owner.owner_agency_id === link.agency_id || this.db.get(
+      `SELECT 1 AS ok FROM agency_parent_relationships
+       WHERE parent_agency_id = ? AND child_agency_id = ? LIMIT 1`,
+      [owner.owner_agency_id, link.agency_id],
+    ));
+    if (!isPlatformAdmin && !ownsAgency) {
+      throw new AuthorizationError('Only a platform administrator or the owning agency administrator can permanently delete this account.');
+    }
+
+    const otherLinks = this.db.get(
+      'SELECT COUNT(*) AS n FROM agency_administrators WHERE user_id = ? AND id <> ?',
+      [link.user_id, link.admin_id],
+    ).n;
+    if (otherLinks > 0) {
+      throw new AppError('This account is linked to another agency; remove only this agency assignment.', 'CONFLICT', 409);
+    }
+
+    const allowedReferences = new Set([
+      'agency_administrators.user_id',
+      // The durable cleanup job must be allowed to retain its own user link
+      // while a failed Auth operation is retried.
+      'admin_identity_cleanup_queue.user_id',
+      'user_roles.user_id',
+      'audit_logs.user_id',
+      'notifications.user_id',
+    ]);
+    const blockers = [];
+    for (const { name: table } of this.db.all("SELECT name FROM sqlite_master WHERE type='table'")) {
+      if (table.startsWith('sqlite_')) continue;
+      const quotedTable = `"${table.replace(/"/g, '""')}"`;
+      const columns = this.db.all(`PRAGMA table_info(${quotedTable})`);
+      const foreignKeys = this.db.all(`PRAGMA foreign_key_list(${quotedTable})`);
+      const candidateColumns = new Set([
+        ...foreignKeys.filter((fk) => fk.table === 'users').map((fk) => fk.from),
+        ...columns.filter((column) => /(user|owner|assign|actor|parent_user|manager).*id/i.test(column.name)
+          || ['created_by', 'updated_by', 'assigned_by', 'revoked_by', 'actor'].includes(column.name)).map((column) => column.name),
+      ]);
+      for (const column of candidateColumns) {
+        let count = 0;
+        try {
+          count = this.db.get(`SELECT COUNT(*) AS n FROM ${quotedTable} WHERE "${column.replace(/"/g, '""')}" = ?`, [link.user_id]).n;
+        } catch { continue; }
+        if (count && !allowedReferences.has(`${table}.${column}`)) blockers.push({ table, column, count });
+      }
+    }
+    if (blockers.length) {
+      throw new AppError('This user has dependent records and cannot be permanently deleted.', 'ENTITY_HAS_DEPENDENCIES', 409);
+    }
+
+    const queueId = `admin-delete-${link.admin_id}`;
+    this.db.run(
+      `INSERT INTO admin_identity_cleanup_queue (id, agency_admin_id, user_id, supabase_user_id, phase)
+       VALUES (?, ?, ?, ?, 'PENDING_AUTH')
+       ON CONFLICT(id) DO UPDATE SET attempts=admin_identity_cleanup_queue.attempts+1,
+         last_error=NULL, updated_at=CURRENT_TIMESTAMP`,
+      [queueId, link.admin_id, link.user_id, link.supabase_user_id || null],
+    );
+
+    let supabase = null;
+    let authUserId = link.supabase_user_id || null;
+    try {
+      const { isConfigured, getSupabaseClient } = require('../config/supabase');
+      if (isConfigured()) {
+        supabase = getSupabaseClient();
+        if (!authUserId) {
+          const { findAuthUserByEmail } = require('./agency-admin-auth');
+          const match = await findAuthUserByEmail(supabase, link.email);
+          authUserId = match && match.id;
+        }
+      } else if (authUserId) {
+        throw new AppError('Supabase is unavailable for deleting the linked Auth identity.', 'SUPABASE_UNAVAILABLE', 503);
+      }
+
+      if (authUserId && supabase) {
+        const { error } = await supabase.auth.admin.deleteUser(authUserId);
+        if (error && error.code !== 'user_not_found') throw new AppError('Supabase Auth deletion failed.', 'SUPABASE_AUTH_DELETE_FAILED', 502);
+        this.db.run(
+          `UPDATE admin_identity_cleanup_queue SET supabase_user_id=?, phase='AUTH_DELETED', updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+          [authUserId, queueId],
+        );
+        const { error: profileError } = await supabase.from('profiles').delete().eq('user_id', authUserId);
+        // Some deployments store the Auth identity only and do not have a
+        // public.profiles table. A missing optional mirror is already clean.
+        if (profileError && !['PGRST205', '42P01'].includes(profileError.code)) {
+          throw new AppError('Supabase profile cleanup failed.', 'SUPABASE_PROFILE_DELETE_FAILED', 502);
+        }
+      } else {
+        this.db.run(`UPDATE admin_identity_cleanup_queue SET phase='AUTH_DELETED', updated_at=CURRENT_TIMESTAMP WHERE id=?`, [queueId]);
+      }
+
+      if (supabase) {
+        const { error: mirrorError } = await supabase.from('agency_administrators')
+          .delete()
+          .eq('id', localIdToCloudUuid(link.admin_id));
+        if (mirrorError) throw new AppError('Supabase administrator mirror cleanup failed.', 'SUPABASE_MIRROR_DELETE_FAILED', 502);
+      }
+      this.db.run(`UPDATE admin_identity_cleanup_queue SET phase='CLOUD_MIRROR_DELETED', updated_at=CURRENT_TIMESTAMP WHERE id=?`, [queueId]);
+
+      this.db.transaction(() => {
+        const currentLink = this.db.get('SELECT user_id FROM agency_administrators WHERE id = ?', [link.admin_id]);
+        if (!currentLink || currentLink.user_id !== link.user_id) throw new AppError('Administrator link changed during deletion.', 'CONFLICT', 409);
+        this.db.run('DELETE FROM agency_administrators WHERE id = ?', [link.admin_id]);
+        this.db.run('DELETE FROM user_roles WHERE user_id = ?', [link.user_id]);
+        this.db.run('DELETE FROM users WHERE id = ?', [link.user_id]);
+        this.db.run(`UPDATE admin_identity_cleanup_queue SET phase='COMPLETE', updated_at=CURRENT_TIMESTAMP WHERE id=?`, [queueId]);
+      })();
+      return { id: link.admin_id, deleted: true };
+    } catch (error) {
+      const message = String(error && error.message || error).slice(0, 500);
+      try {
+        this.db.run(
+          'UPDATE admin_identity_cleanup_queue SET supabase_user_id=COALESCE(?,supabase_user_id), attempts=attempts+1, last_error=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+          [authUserId, message, queueId],
+        );
+      } catch (queueError) {
+        console.error('[admin-hard-delete] retry queue update failed', { queueId, message: queueError.message });
+      }
+      console.error('[admin-hard-delete] cleanup remains pending', { queueId, phase: this.db.get('SELECT phase FROM admin_identity_cleanup_queue WHERE id=?', [queueId])?.phase || 'UNKNOWN' });
+      throw error;
+    }
   }
 
   async resetSubAgencyAdminPassword(userId, agencyId, { password }) {

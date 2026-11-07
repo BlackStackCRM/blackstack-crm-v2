@@ -187,6 +187,20 @@ router.delete('/sub-agencies/:id',
     }
   });
 
+router.delete('/administrators/:id/permanent',
+  authMiddleware,
+  requirePermission('agency_control.agencies.manage'),
+  [param('id').isString().notEmpty()],
+  validate,
+  async (req, res, next) => {
+    try {
+      const result = await svc().permanentlyDeleteAdministrator(req.user.userId, req.params.id);
+      res.json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  });
+
 router.post('/sub-agencies/:id/administrators',
   authMiddleware,
   requirePermission('agency_control.agencies.manage'),
