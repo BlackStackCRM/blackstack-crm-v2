@@ -10,6 +10,12 @@ class Topbar {
     this.init();
   }
 
+  escapeHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[char]);
+  }
+
   init() {
     this.renderUserMenu();
     this.renderNotifications();
@@ -23,14 +29,14 @@ class Topbar {
     this.userContainer.innerHTML = `
       <button id="user-menu-btn" class="flex items-center gap-stack-sm p-1 rounded-lg hover:bg-surface-container transition-colors" aria-haspopup="true" aria-expanded="false" aria-label="User menu">
         <div class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-on-secondary font-label-md text-[10px] font-semibold">
-          ${initials || 'U'}
+          ${this.escapeHTML(initials || 'U')}
         </div>
         <span class="material-symbols-outlined text-[18px] text-on-surface-variant hidden sm:block">expand_more</span>
       </button>
       <div id="user-dropdown" class="hidden absolute right-0 top-full mt-2 w-56 bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant/50 py-1 z-50 animate-scale-in" role="menu">
         <div class="px-4 py-3 border-b border-outline-variant/30">
-          <p class="font-body-sm text-body-sm text-on-surface font-medium">${user?.firstName || ''} ${user?.lastName || ''}</p>
-          <p class="font-body-sm text-body-sm text-on-surface-variant">${user?.email || ''}</p>
+          <p class="font-body-sm text-body-sm text-on-surface font-medium">${this.escapeHTML(user?.firstName || '')} ${this.escapeHTML(user?.lastName || '')}</p>
+          <p class="font-body-sm text-body-sm text-on-surface-variant">${this.escapeHTML(user?.email || '')}</p>
         </div>
         <a href="#profile" class="flex items-center gap-2 px-4 py-2 text-body-sm text-on-surface hover:bg-surface-container transition-colors" role="menuitem">
           <span class="material-symbols-outlined text-[18px] text-on-surface-variant">person</span>
@@ -77,13 +83,17 @@ class Topbar {
 
   async loadNotifications() {
     try {
-      const unread = await API.get('/notifications/unread-count');
+      // FIX (sub-agency loop): notifications are DECORATIVE — a 401/403 here
+      // (hierarchy accounts without notifications.view) must not trigger the
+      // global interceptor's logout/redirect. silent: true keeps the session
+      // intact and lets this catch handle the failure locally.
+      const unread = await API.get('/notifications/unread-count', {}, { silent: true });
       const count = unread?.count || 0;
       if (this.notificationBadge) {
         this.notificationBadge.classList.toggle('hidden', count === 0);
       }
 
-      const res = await API.get('/notifications', { limit: 10 });
+      const res = await API.get('/notifications', { limit: 10 }, { silent: true });
       const items = res?.items || res?.data?.items || [];
       const list = document.getElementById('notifications-list');
       if (!list) return;
@@ -95,8 +105,8 @@ class Topbar {
 
       list.innerHTML = items.map(n => `
         <div class="px-4 py-3 hover:bg-surface-container-low transition-colors ${n.isRead ? '' : 'bg-secondary-container/5'}">
-          <p class="font-body-sm text-body-sm text-on-surface font-medium">${n.title || ''}</p>
-          <p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">${n.message || ''}</p>
+          <p class="font-body-sm text-body-sm text-on-surface font-medium">${this.escapeHTML(n.title || '')}</p>
+          <p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">${this.escapeHTML(n.message || '')}</p>
           <p class="font-body-sm text-body-sm text-on-surface-variant mt-1">${new Date(n.createdAt).toLocaleString()}</p>
         </div>
       `).join('');

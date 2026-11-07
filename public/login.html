@@ -110,6 +110,7 @@
           <div>
             <label for="login-email" class="block font-label-md text-label-md text-on-surface mb-1">Email</label>
             <input type="email" id="login-email" name="email" required autocomplete="email" class="w-full bg-surface-container-low py-2.5 px-3 rounded-lg font-body-sm text-body-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary/40 placeholder:text-on-surface-variant/70 transition-shadow" placeholder="you@company.com"/>
+            <p id="login-email-notice" class="hidden mt-1 font-body-sm text-body-sm text-on-surface-variant"></p>
           </div>
           <div>
             <label for="login-password" class="block font-label-md text-label-md text-on-surface mb-1">Password</label>
@@ -133,6 +134,8 @@
       <p class="text-center font-body-sm text-body-sm text-on-surface-variant/60 mt-4">BlackStack CRM V2</p>
     </div>
   </div>
+  <script src="/js/utils/email-sanitizer.js">
+  </script>
   <script src="/js/api/client.js">
   </script>
   <script src="/js/api/auth.js">

@@ -27,6 +27,38 @@ class AuthController {
     }
   }
 
+  /**
+   * SETUP-MODE STATUS (public, unauthenticated). Read-only: mode + userCount.
+   * Used by login.js to decide between login and Create-First-User forms.
+   * The endpoint was referenced by the frontend but never implemented — a 404
+   * on page load disabled the login form via showStoreError().
+   */
+  setupStatus(req, res) {
+    res.json(successResponse(this.service.setupStatus()));
+  }
+
+  /**
+   * CREATE FIRST USER (public, unauthenticated). 409 if a user already
+   * exists. Returns a login-ready session so the operator lands on the
+   * dashboard right after setup.
+   */
+  async createFirstUser(req, res, next) {
+    try {
+      const b = req.body || {};
+      const payload = {
+        fullName: b.full_name || b.fullName,
+        email: b.email,
+        password: b.password,
+      };
+      await this.service.createFirstUser(payload);
+      // Auto-login with the freshly created credentials.
+      const result = await this.service.login(payload.email, payload.password);
+      res.status(201).json(successResponse(result, 201));
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getProfile(req, res, next) {
     try {
       const user = await this.service.getProfile(req.user);

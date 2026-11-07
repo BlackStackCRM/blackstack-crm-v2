@@ -129,10 +129,37 @@ CREATE TABLE IF NOT EXISTS agencies (
   FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_agencies_code ON agencies(agency_code);
-CREATE INDEX IF NOT EXISTS idx_agencies_status  ON agencies(status);
-CREATE INDEX IF NOT EXISTS idx_agencies_company  ON agencies(company_id);
-CREATE INDEX IF NOT EXISTS idx_agencies_provider ON agencies(provider_company_id);
+-- Secure admin provisioning (one-time sign-up token). The Mother Company operator
+-- mints a single-use token that the Distribution Agency admin completes by setting
+-- a password. NO plaintext password is ever stored, logged or returned.
+CREATE TABLE IF NOT EXISTS admin_secure_setup (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL,
+  token         TEXT NOT NULL,
+  agency_id     TEXT NOT NULL,
+  provider_company_id TEXT NOT NULL,
+  created_by    TEXT,
+  expires_at    DATETIME NOT NULL,
+  used          INTEGER NOT NULL DEFAULT 0,
+  created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE,
+  FOREIGN KEY (provider_company_id) REFERENCES companies(id) ON DELETE RESTRICT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_setup_token ON admin_secure_setup(token);
+CREATE INDEX IF NOT EXISTS idx_admin_setup_agency ON admin_secure_setup(agency_id, used);
+
+-- Password-reset token (formerly `reset_password_tokens` in the old CRM). Issued
+-- by the admin's "Forgot password" flow; single-use; expires at creation time.
+CREATE TABLE IF NOT EXISTS password_reset_token (
+  token         TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL,
+  expires_at    DATETIME NOT NULL,
+  created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_token(user_id);
 
 -- ── Agency administrators ─────────────────────────────────────────────────────
 -- One row per (agency, user). A user may administer exactly one agency here;

@@ -107,7 +107,6 @@ class WorkflowsController {
       const context = {
         companyId: req.user.companyId,
         userId: req.user.userId,
-        ...(req.body.context || {})
       };
 
       const result = await this.executor.execute(req.params.id, context);

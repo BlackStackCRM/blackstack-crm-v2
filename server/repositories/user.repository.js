@@ -43,7 +43,10 @@ class UserRepository extends BaseRepository {
          WHERE rp.role_id IN (${placeholders})`, roleIds
       ).map(p => p.code);
     }
-    if (roles.some(r => r.code === 'ADMIN')) permissions = ['*'];
+    // Keep explicitly assigned permissions (including Mother Company grants)
+    // alongside the CRM-wide admin wildcard. Control-plane middleware checks
+    // for a named grant and deliberately ignores '*'.
+    if (roles.some(r => r.code === 'ADMIN')) permissions = Array.from(new Set([...permissions, '*']));
     return { roles, permissions };
   }
 

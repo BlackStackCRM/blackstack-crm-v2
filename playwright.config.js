@@ -31,6 +31,7 @@ module.exports = defineConfig({
     viewport: { width: 1440, height: 900 },
     actionTimeout: 15000,
     navigationTimeout: 15000,
+    slowMo: 500, // 500ms delay after every action — visible to the human eye
   },
   projects: [
     {

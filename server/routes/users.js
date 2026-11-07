@@ -15,7 +15,7 @@ const handle = (req, res, next) => {
 };
 
 router.get('/', authMiddleware, requirePermission('users.view'), controller.list.bind(controller));
-router.get('/:id', authMiddleware, controller.getOne.bind(controller));
+router.get('/:id', authMiddleware, requirePermission('users.view'), controller.getOne.bind(controller));
 router.post('/', authMiddleware, requirePermission('users.manage'),
   [body('email').isEmail(), body('full_name').notEmpty(), body('password').isLength({ min: 8 })],
   handle, controller.create.bind(controller));

@@ -1,6 +1,12 @@
 class Toast {
   static container = null;
 
+  static escapeHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[char]);
+  }
+
   static getContainer() {
     if (!this.container) {
       this.container = document.getElementById('toast-container');
@@ -30,7 +36,7 @@ class Toast {
     toast.setAttribute('role', 'alert');
     toast.innerHTML = `
       <span class="material-symbols-outlined text-[18px] shrink-0">${icons[type] || icons.info}</span>
-      <span class="flex-1">${message}</span>
+      <span class="flex-1">${this.escapeHTML(message)}</span>
       <button class="w-5 h-5 flex items-center justify-center rounded hover:bg-black/5 transition-colors shrink-0" aria-label="Dismiss">
         <span class="material-symbols-outlined text-[16px]">close</span>
       </button>

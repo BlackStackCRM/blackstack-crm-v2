@@ -97,6 +97,7 @@ beforeAll(async () => {
     const src = path.join(ROOT, 'data', 'blackstack-crm.db' + s);
     if (fs.existsSync(src)) fs.copyFileSync(src, dbPath + s);
   }
+  require_(path.join(ROOT, 'tests/helpers/reset-cloned-test-admin.js'))(dbPath);
   {
     const seed = new DatabaseSync(dbPath);
     seed.prepare('UPDATE financial_years SET is_locked = 0 WHERE company_id = ?').run('default');
@@ -213,6 +214,82 @@ describe('CRM-05 — the constraint mapping (real module, not a copy)', () => {
     ]) {
       const r = classifyError(mk(msg));
       expect(r.code, `"${msg}" must not be ENTITY_HAS_DEPENDENCIES`).not.toBe('ENTITY_HAS_DEPENDENCIES');
+    }
+  });
+
+  // ---- Edge branches of classifyError (utils/errorMapping.js) ---------------
+
+  test('an error carrying status 500 is NOT trusted as-is — it stays internal', () => {
+    // Only 4xx statuses are trusted; a 500 must not be laundered through the
+    // application-error branch with an arbitrary message exposed to the client.
+    const err = Object.assign(new Error('server exploded'), { status: 500, code: 'CUSTOM_500' });
+    const r = classifyError(err);
+    expect(r.status).toBe(500);
+    expect(r.classification).toBe('INTERNAL');
+    expect(r.message, 'raw internal message must not leak to the client').not.toMatch(/server exploded/);
+  });
+
+  test('a status below 400 is not trusted either', () => {
+    const err = Object.assign(new Error('weird'), { status: 302, code: 'REDIRECT' });
+    const r = classifyError(err);
+    expect(r.status).toBe(500);
+    expect(r.classification).toBe('INTERNAL');
+  });
+
+  test('a ValidationError with non-string field values drops the fields map', () => {
+    // Only a plain string->string map is forwarded; anything else could leak
+    // internals to the client, so classifyError must omit `fields` entirely.
+    const err = Object.assign(new Error('bad input'), {
+      status: 400, code: 'VALIDATION_ERROR',
+      fields: { name: 'required', nested: { deep: 'object' } },
+    });
+    const r = classifyError(err);
+    expect(r.status).toBe(400);
+    expect(r.fields).toBeUndefined();
+  });
+
+  test('a ValidationError with string-only field values keeps the fields map', () => {
+    const err = Object.assign(new Error('bad input'), {
+      status: 400, code: 'VALIDATION_ERROR',
+      fields: { name: 'required', email: 'invalid format' },
+    });
+    const r = classifyError(err);
+    expect(r.status).toBe(400);
+    expect(r.fields).toEqual({ name: 'required', email: 'invalid format' });
+  });
+
+  test('an error with no status and no fields keeps its original code', () => {
+    const err = Object.assign(new Error('boom'), { code: 'MY_ODD_CODE' });
+    const r = classifyError(err);
+    expect(r.status).toBe(500);
+    expect(r.code).toBe('MY_ODD_CODE');
+    expect(r.classification).toBe('INTERNAL');
+  });
+
+  test('null/undefined error input does not throw', () => {
+    expect(() => classifyError(null)).not.toThrow();
+    expect(() => classifyError(undefined)).not.toThrow();
+    const r = classifyError(undefined);
+    expect(r.status).toBe(500);
+    expect(r.classification).toBe('INTERNAL');
+  });
+
+  test('SQLITE_CONSTRAINT_FOREIGNKEY code maps even when the message is opaque', () => {
+    const err = Object.assign(new Error('constraint violation'), { code: 'SQLITE_CONSTRAINT_FOREIGNKEY' });
+    const r = classifyError(err);
+    expect(r.status).toBe(409);
+    expect(r.code).toBe('ENTITY_HAS_DEPENDENCIES');
+  });
+
+  test('UNIQUE/CHECK/NOT NULL still classify when err.code is a non-SQLITE value', () => {
+    for (const [msg, expectedCode, expectedStatus] of [
+      ['UNIQUE constraint failed: t.c', 'DUPLICATE_VALUE', 409],
+      ["CHECK constraint failed: t.c IN ('A')", 'VALIDATION_ERROR', 400],
+      ['NOT NULL constraint failed: t.c', 'VALIDATION_ERROR', 400],
+    ]) {
+      const r = classifyError(mk(msg, 'SOME_DRIVER_CODE'));
+      expect(r.code, msg).toBe(expectedCode);
+      expect(r.status, msg).toBe(expectedStatus);
     }
   });
 });

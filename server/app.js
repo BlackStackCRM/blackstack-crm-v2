@@ -108,7 +108,7 @@ const REQUEST_TIMEOUT_MS = parseInt(process.env.REQUEST_TIMEOUT_MS) || 30000;
 
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100000,
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000,
   message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests.' } },
   skip: process.env.NODE_ENV === 'development' || process.env.DEMO_MODE === 'true'
     ? () => true  // Disable rate limiting in development/demo mode
@@ -132,6 +132,9 @@ app.get('/ready', (req, res) => {
     res.status(503).json({ success: false, error: { code: 'NOT_READY', message: 'Database not ready.' } });
   }
 });
+
+// --- Retry worker (background cloud sync retry) ---
+const { startRetryWorker } = require('./services/retry-worker');
 
 app.use('/api/auth', authRoutes);
 // Mother Company / Distribution Agency control (Phase 1).
@@ -163,6 +166,8 @@ app.use('/api/appointments', appointmentsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/notes', notesRoutes);
 app.use('/api/datasafety', require('./routes/dataSafety'));
+app.use('/api/agency-control', require('./routes/agencyControl'));
+app.use('/api', require('./routes/rbac'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/deletion', require('./routes/deletion'));
 
@@ -188,8 +193,25 @@ app.use((req, res) => {
   res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'The requested resource was not found.' } });
 });
 
-// Global FK/constraint guard: a raw SQLite message must never reach the UI.
-const FK_RE = /FOREIGN KEY constraint failed|UNIQUE constraint failed|NOT NULL constraint failed|CHECK constraint failed/i;
+// Global unhandled rejection and uncaught exception handlers — the server must
+// never die silently on a 4xx/5xx API error. Any handler here logs the full
+// stack and sends a structured error so the root cause is visible.
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[UNHANDLED_REJECTION]', {
+    reason: reason && reason.message ? reason.message : String(reason),
+    stack: reason && reason.stack,
+    promise: promise && promise.toString ? promise.toString() : String(promise),
+  });
+});
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT_EXCEPTION]', {
+    message: err && err.message ? err.message : String(err),
+    stack: err && err.stack,
+  });
+  // An uncaught exception can leave process state inconsistent. Fail closed;
+  // Electron/service supervision can restart the application cleanly.
+  process.exit(1);
+});
 app.use((err, req, res, next) => {
   // PHASE 3 STEP 3C (CRM-05): the constraint mapping now lives in
   // server/utils/errorMapping.js so it can be unit-tested directly.
@@ -300,6 +322,9 @@ runSafeMigrations({ backup: process.env.MIGRATION_BACKUP !== 'false', recoverSta
   }
   // Bootstrap seed data ONLY when DEMO_MODE=true (explicit, development-only).
   const demoMode = process.env.DEMO_MODE === 'true';
+  // Start the background retry worker AFTER migrations succeeded and the DB
+  // connection is bound (runSafeMigrations completed above).
+  startRetryWorker();
   const startServer = () => {
     listenOnce(PORT, HOST)
       .then((srv) => {
@@ -333,6 +358,11 @@ runSafeMigrations({ backup: process.env.MIGRATION_BACKUP !== 'false', recoverSta
 // --- Graceful shutdown -------------------------------------------------------
 async function shutdown(signal) {
   console.log(`[shutdown] ${signal} received; closing server...`);
+  // Stop the background retry worker (clears timer, waits for in-flight pass).
+  try {
+    const { stopRetryWorker } = require('./services/retry-worker');
+    stopRetryWorker();
+  } catch { /* worker may not have been started */ }
   if (server) {
     server.close(() => {
       try {

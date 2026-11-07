@@ -2,12 +2,16 @@ const PERMISSIONS = new Set([
   'contacts.view', 'contacts.create', 'contacts.edit', 'contacts.delete',
   'organizations.view', 'organizations.create', 'organizations.edit', 'organizations.delete',
   'deals.view', 'deals.create', 'deals.edit', 'deals.delete',
+  'leads.view', 'leads.delete', 'customers.view', 'customers.delete',
+  'notes.view', 'notes.delete', 'pipelines.view', 'pipelines.delete',
+  'relationships.view', 'relationships.delete',
+  'appointments.view', 'appointments.delete',
   'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.delete',
   'payments.view', 'payments.create', 'payments.refund',
   'products.view', 'products.create', 'products.edit', 'products.delete',
   'tasks.view', 'tasks.create', 'tasks.edit', 'tasks.delete',
-  'activities.view', 'activities.create',
-  'workflows.view', 'workflows.manage',
+  'activities.view', 'activities.create', 'activities.delete',
+  'workflows.view', 'workflows.manage', 'workflows.execute',
   'reports.view', 'reports.export',
   'users.view', 'users.manage',
   'settings.manage',
@@ -42,6 +46,17 @@ const PERMISSIONS = new Set([
   // Inventory Management
   'inventory.view', 'inventory.create', 'inventory.edit', 'inventory.delete',
   'inventory.post', 'inventory.cancel', 'inventory.approve', 'inventory.reports',
+  // Agency Control (distribution agency sub-agencies + customer tenants).
+  // Enforced by server/routes/agencyControl.js via requirePermission; the codes
+  // are seeded to the permissions table (migration 085 line) and granted to
+  // per-agency AGENCY_ADMIN_* roles (migration 089).
+  'agency_control.subagencies.view', 'agency_control.subagencies.create',
+  'agency_control.agencies.manage', 'agency_control.customers.manage',
+  // Dashboard (FIX: hierarchy accounts log in and land on #dashboard, whose
+  // endpoints are gated on dashboard.view. The code was missing from this
+  // catalog entirely, so assertPermission rejected it for EVERY user — not
+  // just hierarchy accounts — with "Permission denied: dashboard.view".)
+  'dashboard.view',
 ]);
 
 class Authorizer {

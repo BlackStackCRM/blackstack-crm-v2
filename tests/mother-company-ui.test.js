@@ -18,6 +18,7 @@ const PAGE_SRC = fs.readFileSync(path.join(ROOT, 'public', 'js', 'pages', 'mothe
 const SIDEBAR_SRC = fs.readFileSync(path.join(ROOT, 'public', 'js', 'components', 'Sidebar.js'), 'utf8');
 const APP_SRC = fs.readFileSync(path.join(ROOT, 'public', 'js', 'app.js'), 'utf8');
 const INDEX_SRC = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+const AGENCY_PAGE_SRC = fs.readFileSync(path.join(ROOT, 'public', 'js', 'pages', 'agency-control.js'), 'utf8');
 
 /**
  * Load the page module with a controllable session + API.
@@ -26,13 +27,14 @@ const INDEX_SRC = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8
  * object supplied here, so tests must register elements in this SAME object
  * rather than replacing a global afterwards.
  */
-function loadPage({ permissions = [], api = {}, hosts = {} } = {}) {
-  const store = { crm_user: JSON.stringify({ permissions }) };
+function loadPage({ permissions = [], email = 'admin@blackstack.local', api = {}, hosts = {} } = {}) {
+  const store = { crm_user: JSON.stringify({ permissions, email }) };
   const hostMap = hosts;
   const fakeDocument = {
     getElementById: (id) => (id in hostMap ? hostMap[id] : null),
     querySelectorAll: () => [],
     createElement: () => ({ style: {}, classList: { add() {}, remove() {} }, addEventListener() {} }),
+    addEventListener() {},
   };
   const sandbox = {
     window: {
@@ -45,8 +47,12 @@ function loadPage({ permissions = [], api = {}, hosts = {} } = {}) {
     localStorage: {
       getItem: (k) => (k in store ? store[k] : null),
       setItem: (k, v) => { store[k] = v; },
+      removeItem: (k) => { delete store[k]; },
     },
     document: fakeDocument,
+    fetch: () => Promise.resolve({
+      json: () => Promise.resolve({ success: true, data: { permissions, email } }),
+    }),
     console,
     setTimeout,
     clearTimeout,
@@ -110,7 +116,21 @@ describe('Mother Company page — access gating', () => {
     expect(page.can('mother_company.agencies.create')).toBe(false);
   });
 
-  test('creation and status controls appear only with the matching permission', () => {
+  test('an explicit permission grants access regardless of email address', () => {
+    const { page } = loadPage({ email: 'operator@agency.test', permissions: ['mother_company.view'] });
+    expect(page.currentPermissions()).toEqual(['mother_company.view']);
+  });
+
+  test('master controls for hierarchy and customer lifecycle are permission-gated', () => {
+    const denied = loadPage({ permissions: ['mother_company.view'] }).page.shell();
+    expect(denied).not.toMatch(/Agency hierarchy/);
+    expect(denied).not.toMatch(/Customer tenants/);
+    const allowed = loadPage({ permissions: ['mother_company.view'] }).page.shell();
+    expect(allowed).not.toMatch(/Agency hierarchy/);
+    expect(allowed).not.toMatch(/Customer tenants/);
+  });
+
+  test('create and status controls appear only with the matching permission', () => {
     const viewer = loadPage({ permissions: ['mother_company.agencies.view'] }).page;
     expect(viewer.can('mother_company.agencies.create')).toBe(false);
 
@@ -118,6 +138,32 @@ describe('Mother Company page — access gating', () => {
       permissions: ['mother_company.agencies.view', 'mother_company.agencies.create'],
     }).page;
     expect(creator.can('mother_company.agencies.create')).toBe(true);
+  });
+
+  test('zero agencies renders an explicit empty state, never sample rows', () => {
+    const { page, mount } = loadPage({ permissions: ['mother_company.view'] });
+    const read = mount('mc-agencies');
+    page.agencies = [];
+    page.renderAgencies();
+    const html = read();
+    expect(html).toMatch(/No distribution agencies yet/i);
+    // No fabricated agency codes, names or sample rows of any kind.
+    expect(html).not.toMatch(/AGY-[A-Z0-9]/);
+    expect(html).not.toMatch(/Demo|Sample|Example Ltd/i);
+  });
+
+  test('dashboard shows no hierarchy or customer-tenant sections', () => {
+    const { page, mount } = loadPage({ permissions: ['mother_company.view', 'mother_company.agencies.create'] });
+    const read = mount('page-container');
+    page.agencies = [];
+    page.filters.status = '';
+    page.init();
+    const html = read();
+    // No hierarchy section, no customer-tenant section.
+    expect(html).not.toMatch(/Agency hierarchy/);
+    expect(html).not.toMatch(/Customer tenants/);
+    expect(html).not.toMatch(/Create sub-agency/);
+    expect(html).not.toMatch(/Create customer tenant/);
   });
 });
 
@@ -197,6 +243,9 @@ describe('Mother Company wiring', () => {
     // Page modules are read from window.PageModules, which only exists if the
     // script tag is present. Without it the route silently resolves to nothing.
     expect(INDEX_SRC).toMatch(/\/js\/pages\/mother-company\.js/);
+    expect(APP_SRC).toMatch(/'agency-control':\s*\{\s*module:\s*'agencyControl'/);
+    expect(INDEX_SRC).toMatch(/\/js\/pages\/agency-control\.js/);
+    expect(AGENCY_PAGE_SRC).toMatch(/agency_control\.customers\.manage/);
   });
 
   test('the sidebar entry is permission-gated, not unconditional', () => {
@@ -204,8 +253,9 @@ describe('Mother Company wiring', () => {
     expect(SIDEBAR_SRC).toMatch(/visibleItems\(\)/);
   });
 
-  test('the page does not contain any hard-coded email or password', () => {
-    expect(PAGE_SRC).not.toMatch(/admin@blackstack\.lockal/i);
+  test('the page uses explicit permission gating and contains no password', () => {
+    expect(PAGE_SRC).toMatch(/mother_company\./i);
+    expect(PAGE_SRC).not.toMatch(/admin@blackstack\.local/i);
     expect(PAGE_SRC.toLowerCase()).not.toMatch(/password\s*[:=]\s*['"][^'"]+['"]/i);
   });
 });

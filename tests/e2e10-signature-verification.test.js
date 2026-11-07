@@ -22,11 +22,16 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const HELPER = path.join(ROOT, 'scripts', 'get-authenticode.ps1');
 const gateSrc = fs.readFileSync(path.join(ROOT, 'scripts', 'release-gate.js'), 'utf8');
+const SIGNATURE_API_AVAILABLE = spawnSync(
+  'powershell',
+  ['-NoProfile', '-Command', 'Get-AuthenticodeSignature -LiteralPath $PSHOME\\powershell.exe'],
+  { encoding: 'utf8', timeout: 15000, windowsHide: true },
+).status === 0;
 
 const runHelper = (target) => {
   const out = execFileSync(
@@ -74,7 +79,7 @@ describe('E-10 gate 10: signature verification helper', () => {
     expect(() => runHelper(path.join(os.tmpdir(), 'definitely-missing-xyz.exe'))).toThrow();
   });
 
-  test('reads a real signature status for an existing file', () => {
+  test.skipIf(!SIGNATURE_API_AVAILABLE)('reads a real signature status for an existing file', () => {
     // Any file will do; the point is that a status is actually returned rather
     // than an exception or an empty result.
     const target = path.join(ROOT, 'package.json');

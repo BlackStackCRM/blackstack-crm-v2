@@ -165,6 +165,7 @@ beforeAll(async () => {
     const src = path.join(ROOT, 'data', 'blackstack-crm.db' + sidecar);
     if (fs.existsSync(src)) fs.copyFileSync(src, dbPath + sidecar);
   }
+  require_(path.join(ROOT, 'tests/helpers/reset-cloned-test-admin.js'))(dbPath);
 
   // The disposable clone inherits production's financial-year state; posting and
   // some CRM paths enforce the lock. Unlock it here, on the clone only.

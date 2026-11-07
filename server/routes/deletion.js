@@ -2,7 +2,7 @@
  * Deletion controller + routes — the ONLY delete surface for the UI.
  *
  * POST /api/deletion/analyze        { entity_type, entity_id }
- * POST /api/deletion/archive        { entity_type, entity_id, reason }  → PERMANENT DELETE
+ * POST /api/deletion/archive        deprecated; returns ARCHIVE_NOT_SUPPORTED
  * POST /api/deletion/execute        { entity_type, entity_id, confirmationToken, expectedCount? }
  *
  * NOTE: Restore is no longer supported — all deletions are permanent.
@@ -17,13 +17,25 @@ const { AppError, AuthorizationError } = require('../utils/errors');
 
 const router = express.Router();
 
-// Permission suffix map per entity type
-const PERM = {
-  contact: 'contacts', organization: 'organizations', lead: 'contacts',
-  deal: 'deals', task: 'tasks', note: null, appointment: 'appointments',
-  product: 'products', pipeline: null, relationship: null,
-  workflow: 'workflows', customer: 'contacts', activity: null,
-  invoice: 'invoices', user: 'users', role: 'users',
+// Explicit permissions for every supported entity and operation. Missing
+// entries fail closed instead of silently skipping authorization.
+const ENTITY_PERMISSIONS = {
+  contact: { view: 'contacts.view', delete: 'contacts.delete' },
+  organization: { view: 'organizations.view', delete: 'organizations.delete' },
+  lead: { view: 'leads.view', delete: 'leads.delete' },
+  deal: { view: 'deals.view', delete: 'deals.delete' },
+  task: { view: 'tasks.view', delete: 'tasks.delete' },
+  note: { view: 'notes.view', delete: 'notes.delete' },
+  appointment: { view: 'appointments.view', delete: 'appointments.delete' },
+  product: { view: 'products.view', delete: 'products.delete' },
+  pipeline: { view: 'pipelines.view', delete: 'pipelines.delete' },
+  relationship: { view: 'relationships.view', delete: 'relationships.delete' },
+  workflow: { view: 'workflows.view', delete: 'workflows.manage' },
+  customer: { view: 'customers.view', delete: 'customers.delete' },
+  activity: { view: 'activities.view', delete: 'activities.delete' },
+  invoice: { view: 'invoices.view', delete: 'invoices.delete' },
+  user: { view: 'users.view', delete: 'users.manage' },
+  role: { view: 'users.view', delete: 'users.manage' },
 };
 
 function getContext(req) {
@@ -31,8 +43,6 @@ function getContext(req) {
 }
 
 // Global middleware converts incoming JSON snake_case; accept both spellings.
-const pick = (b, snake, camel) => b?.[snake] ?? b?.[camel];
-
 function getParams(req) {
   const b = req.body || {};
   return {
@@ -45,10 +55,9 @@ function getParams(req) {
 }
 
 function checkPermission(entityType, action, req) {
-  const prefix = PERM[entityType];
-  if (prefix) requirePermission(`${prefix}.${action}`)(req, {}, (err) => {
-    if (err) throw new AuthorizationError(`Missing permission ${prefix}.${action}`);
-  });
+  const permission = ENTITY_PERMISSIONS[entityType]?.[action];
+  if (!permission) throw new AuthorizationError(`No ${action} permission is configured for this entity type.`);
+  requirePermission(permission)(req, {}, (err) => { if (err) throw err; });
 }
 
 class DeletionController {
@@ -66,7 +75,9 @@ class DeletionController {
       const p = getParams(req);
       checkPermission(p.entityType, 'delete', req);
       const svc = new DeletionService(getConn());
-      // Archive now performs permanent delete (no soft-delete).
+      // Soft-delete columns were removed by migration 079. Do not emulate
+      // archive with an unsafe direct DELETE; hard deletion is available only
+      // through /execute after dependency analysis and confirmation.
       return res.json(successResponse(svc.archiveEntity(p.entityType, p.entityId, p.reason, getContext(req))));
     } catch (err) { next(err); }
   }

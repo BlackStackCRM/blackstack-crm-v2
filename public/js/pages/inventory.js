@@ -268,7 +268,7 @@
     } else if (config.group === 'stock_mgmt') {
       window.location.hash = `inventory/${key}`;
       window.dispatchEvent(new CustomEvent('page:navigate', {
-        detail: { path: `inventory/${key}`, mode: 'transaction', key, apiPath, label: config.label }
+        detail: { path: `inventory/${key}`, mode: 'master', key, apiPath, label: config.label }
       }));
     } else {
       window.location.hash = `inventory/${key}`;

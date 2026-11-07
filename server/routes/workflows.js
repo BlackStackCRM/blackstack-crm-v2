@@ -15,12 +15,12 @@ const handle = (req, res, next) => {
 };
 
 router.get('/', authMiddleware, requirePermission('workflows.view'), controller.list.bind(controller));
-router.get('/:id', authMiddleware, controller.getOne.bind(controller));
+router.get('/:id', authMiddleware, requirePermission('workflows.view'), controller.getOne.bind(controller));
 router.post('/', authMiddleware, requirePermission('workflows.manage'),
   [body('name').notEmpty(), body('trigger_type').notEmpty()],
   handle, controller.create.bind(controller));
 router.put('/:id', authMiddleware, requirePermission('workflows.manage'), controller.update.bind(controller));
 router.delete('/:id', authMiddleware, requirePermission('workflows.manage'), controller.remove.bind(controller));
-router.post('/:id/trigger', authMiddleware, controller.trigger.bind(controller));
+router.post('/:id/trigger', authMiddleware, requirePermission('workflows.execute'), controller.trigger.bind(controller));
 
 module.exports = router;

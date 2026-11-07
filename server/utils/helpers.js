@@ -4,12 +4,12 @@ function asyncHandler(fn) {
 
 function getPagination(req, defaults = { limit: 20, maxLimit: 100 }) {
   const maxLimit = defaults.maxLimit || 100;
-  const limit = Math.min(
+  const limit = Math.max(1, Math.min(
     parseInt(req.query.limit) || parseInt(req.query.pageSize) || defaults.limit,
     maxLimit
-  );
-  const page = parseInt(req.query.page) || 1;
-  const offset = parseInt(req.query.offset) || (page - 1) * limit;
+  ));
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const offset = Math.max(0, parseInt(req.query.offset) || (page - 1) * limit);
   return { limit, offset, page };
 }
 

@@ -148,10 +148,24 @@ window.PageModules.dashboard = {
       this.renderPipelineChart(data.pipeline || []);
       this.renderRecentActivity(data.recentActivity || []);
       this.renderTeam(data.teamPerformance || []);
-      await this.renderActionCenter();
+      const actionResult = await this.renderActionCenter();
+      if (actionResult && actionResult.failed) {
+        Toast.error('Action Center failed: ' + (actionResult.error || 'unknown error'));
+      }
       if (!silent) Toast.success('Dashboard refreshed');
     } catch (err) {
-      ErrorState.render(document.querySelector(".page-content") || document.body, () => this.load());
+      const status = err && (err.status || err.statusCode);
+      const msg = (err && (err.message || err.error)) || 'Unknown error';
+      if (status === 401) {
+        Toast.error('Session expired — redirecting to login');
+        setTimeout(() => { window.location.href = '/login.html'; }, 800);
+        return;
+      }
+      ErrorState.render(
+        document.querySelector(".page-content") || document.body,
+        () => this.load(),
+        'Failed to load dashboard: ' + msg
+      );
     }
   },
 
@@ -308,7 +322,7 @@ window.PageModules.dashboard = {
       const actions = (data.actions || []).slice(0, 5);
       if (!actions.length) {
         c.innerHTML = '<div class="p-container-padding text-center"><p class="font-body-sm text-body-sm text-on-surface-variant">You are all caught up!</p></div>';
-        return;
+        return { failed: false };
       }
       const icons = { overdue_task: 'task_alt', no_next_action: 'psychology', stale_lead: 'person_off', upcoming_appointment: 'event' };
       c.innerHTML = actions.map(a => '<div class="p-container-padding hover:bg-surface-container-low transition-colors">' +
@@ -320,8 +334,12 @@ window.PageModules.dashboard = {
           '</div>' +
         '</div>' +
       '</div>').join('');
-    } catch {
-      c.innerHTML = '<div class="p-container-padding text-center"><p class="font-body-sm text-body-sm text-on-surface-variant">Unable to load</p></div>';
+    } catch (e) {
+      // FIX (dashboard diagnosis): surface the real error to load() instead of
+      // swallowing it — a silent catch here blanked the whole dashboard with a
+      // generic ErrorState while the actual cause (a broken SQL column
+      // reference in /ai/action-center) stayed invisible.
+      return { failed: true, error: (e && e.message) || 'unknown' };
     }
   },
 };

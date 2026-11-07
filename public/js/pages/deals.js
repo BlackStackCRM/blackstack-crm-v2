@@ -9,6 +9,12 @@ window.PageModules.deals = {
   state: { page: 1, pageSize: 10, search: '', stage: '', status: '', owner: '' },
   searchTimer: null,
 
+  escapeHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[char]);
+  },
+
   async init() {
     const main = document.getElementById('page-container');
     if (!main) return () => {};
@@ -95,7 +101,7 @@ window.PageModules.deals = {
       this.stageMap = Object.fromEntries(uniqueStages.map(s => [s.id, s.name]));
       if (stageSel) {
         stageSel.innerHTML = '<option value="">All stages</option>' +
-          uniqueStages.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+          uniqueStages.map(s => `<option value="${this.escapeHTML(s.id)}">${this.escapeHTML(s.name)}</option>`).join('');
       }
     } catch {}
   },
@@ -131,12 +137,12 @@ window.PageModules.deals = {
   renderTable(container, items, total) {
     this.table = new DataTable(container, {
       columns: [
-        { key: 'title', label: 'Title', render: (v, r) => '<a href="#deals/' + r.id + '" class="font-medium hover:text-secondary">' + (v || '') + '</a>' },
-        { key: 'contactId', label: 'Contact', render: (v, r) => { const name = r.firstName && r.lastName ? r.firstName + ' ' + r.lastName : (r.firstName || r.lastName || r.contactName || v || '—'); return '<span class="font-medium">' + name + '</span>'; } },
-        { key: 'organizationId', label: 'Organization', render: (v, r) => (r.organizationName || r.organization_name || v || '—') },
+        { key: 'title', label: 'Title', render: (v, r) => '<a href="#deals/' + this.escapeHTML(r.id) + '" class="font-medium hover:text-secondary">' + this.escapeHTML(v || '') + '</a>' },
+        { key: 'contactId', label: 'Contact', render: (v, r) => { const name = r.firstName && r.lastName ? r.firstName + ' ' + r.lastName : (r.firstName || r.lastName || r.contactName || v || '—'); return '<span class="font-medium">' + this.escapeHTML(name) + '</span>'; } },
+        { key: 'organizationId', label: 'Organization', render: (v, r) => this.escapeHTML(r.organizationName || r.organization_name || v || '—') },
         { key: 'value', label: 'Value', render: (v, r) => '<span class="font-medium">' + Currency.format(v, r.currency || this.currentCurrency) + '</span>', align: 'right' },
         { key: 'probability', label: 'Prob.', render: (v) => (v || 0) + '%', align: 'right' },
-        { key: 'stageId', label: 'Stage', render: (v, r) => '<span class="font-medium">' + this.stageName(v || r.stage_id) + '</span>' },
+        { key: 'stageId', label: 'Stage', render: (v, r) => '<span class="font-medium">' + this.escapeHTML(this.stageName(v || r.stage_id)) + '</span>' },
         { key: 'expectedCloseDate', label: 'Close date' },
       ],
       data: items,
@@ -157,7 +163,7 @@ window.PageModules.deals = {
 openRowMenu(row) {
     const isEditable = !['WON', 'LOST'].includes(row.status || row.status);
     const actions = [
-      '<a href="#deals/' + row.id + '" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-surface-container text-body-md"><span class="material-symbols-outlined text-[18px]">visibility</span> View</a>',
+      '<a href="#deals/' + this.escapeHTML(row.id) + '" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-surface-container text-body-md"><span class="material-symbols-outlined text-[18px]">visibility</span> View</a>',
       '<button data-act="edit" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-surface-container text-body-md text-left"><span class="material-symbols-outlined text-[18px]">edit</span> Edit</button>',
       '<button data-act="stage" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-surface-container text-body-md text-left"><span class="material-symbols-outlined text-[18px]">swap_horiz</span> Change stage</button>',
     ];
@@ -262,7 +268,7 @@ openRowMenu(row) {
           </div>
           <div class="col-span-2">
             <label class="block font-label-md text-label-md text-on-surface-variant uppercase mb-1">Title *</label>
-            <input name="title" required value="${d.title || ''}" class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary/40"/>
+            <input name="title" required value="${this.escapeHTML(d.title || '')}" class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary/40"/>
           </div>
           <div>
             <label class="block font-label-md text-label-md text-on-surface-variant uppercase mb-1">Value (${Currency.SYMBOLS[this.currentCurrency]})</label>
@@ -282,7 +288,7 @@ openRowMenu(row) {
             <label class="block font-label-md text-label-md text-on-surface-variant uppercase mb-1">Pipeline</label>
             <select name="pipelineId" id="deal-pipeline" class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary/40">
               <option value="">No pipeline</option>
-              ${pipelines.map(p => '<option value="' + p.id + '" ' + (d.pipelineId === p.id || d.pipeline_id === p.id ? 'selected' : '') + '>' + (p.name || '') + '</option>').join('')}
+              ${pipelines.map(p => '<option value="' + this.escapeHTML(p.id) + '" ' + (d.pipelineId === p.id || d.pipeline_id === p.id ? 'selected' : '') + '>' + this.escapeHTML(p.name || '') + '</option>').join('')}
             </select>
           </div>
           <div>
@@ -295,7 +301,7 @@ openRowMenu(row) {
           </div>
           <div class="col-span-2">
             <label class="block font-label-md text-label-md text-on-surface-variant uppercase mb-1">Description</label>
-            <textarea name="description" rows="2" class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary/40">${d.description || ''}</textarea>
+            <textarea name="description" rows="2" class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary/40">${this.escapeHTML(d.description || '')}</textarea>
           </div>
           <div class="col-span-2 flex justify-end gap-stack-sm pt-stack-sm border-t border-outline-variant/30">
             <button type="button" data-modal-close class="px-4 py-2 rounded-lg hover:bg-surface-container">Cancel</button>
@@ -425,7 +431,7 @@ openRowMenu(row) {
   },
 
   confirmDelete(row) {
-    const modal = new Modal({ title: 'Delete deal?', size: 'sm', content: '<p class="font-body-md text-on-surface mb-stack-md">Delete <strong>' + row.title + '</strong>?</p><div class="flex justify-end gap-stack-sm"><button data-modal-close class="px-4 py-2 rounded-lg hover:bg-surface-container">Cancel</button><button id="confirm-deal-delete" class="bg-error text-on-error px-4 py-2 rounded-lg hover:bg-error/90">Delete</button></div>' });
+    const modal = new Modal({ title: 'Delete deal?', size: 'sm', content: '<p class="font-body-md text-on-surface mb-stack-md">Delete <strong>' + this.escapeHTML(row.title) + '</strong>?</p><div class="flex justify-end gap-stack-sm"><button data-modal-close class="px-4 py-2 rounded-lg hover:bg-surface-container">Cancel</button><button id="confirm-deal-delete" class="bg-error text-on-error px-4 py-2 rounded-lg hover:bg-error/90">Delete</button></div>' });
     modal.open();
     modal.element.querySelector('#confirm-deal-delete').addEventListener('click', async () => {
       try {

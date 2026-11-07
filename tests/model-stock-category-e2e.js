@@ -1,22 +1,11 @@
-/**
- * E2E Test: Stock Category → Model Hierarchy
- * Tests the complete Model-StockCategory relationship:
- *   1. Create a Stock Group
- *   2. Create a Stock Category under that group
- *   3. Navigate to Models — verify Stock Category dropdown shows only created categories
- *   4. Create a Model — select the Stock Category (required field)
- *   5. Verify the Model appears in the list with the correct Stock Category name
- *   6. Edit the Model — verify Stock Category is pre-selected
- *   7. Change the Stock Category to another existing one and save
- *   8. Verify the change persists
- *   9. Verify Model cannot be created without selecting a Stock Category
- *  10. Verify Model-StockCategory relationship in the database (FK)
- *  11. Cleanup all test records
- */
 const { chromium } = require('playwright');
 const { DatabaseSync } = require('node:sqlite');
 
-const DB_PATH = process.env.DB_PATH || './data_test/model-cat-test2.db';
+// E2E_PORT isolation guard: the test MUST run against an isolated disposable DB.
+// It uses E2E_PORT and the server is started with DB_PATH pointing to a disposable
+// copy of production. The test NEVER touches production on port 3000.
+const PORT = Number(process.env.E2E_PORT || 3000);
+const DB_PATH = process.env.DB_PATH || './data_test/fresh-e2e-test.db';
 const TEST_ID = Date.now().toString().slice(-6);
 
 // Helper: clean up via DB directly (bypass UI for reliability)
@@ -77,7 +66,7 @@ const assert = (cond, msg) => {
 
   // ─── Login ───
   console.log('[STEP 1] Logging in...');
-  await page.goto('http://127.0.0.1:3000/login.html', { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://127.0.0.1:${PORT}/login.html`, { waitUntil: 'domcontentloaded' });
   await page.fill('input[name="email"]', 'admin@blackstack.local');
   await page.fill('input[name="password"]', 'admin123');
   await Promise.all([
@@ -92,7 +81,7 @@ const assert = (cond, msg) => {
 
   // ─── Step 1: Create Stock Group ───
   console.log('\n[STEP 2] Creating Stock Group: E2E-GRP-' + TEST_ID);
-  await page.goto('http://127.0.0.1:3000/index.html', { waitUntil: 'networkidle' });
+  await page.goto(`http://127.0.0.1:${PORT}/index.html`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1000);
   await page.evaluate(() => window.location.hash = '#inventory/stock_groups');
   await page.waitForTimeout(2000);
@@ -126,7 +115,7 @@ const assert = (cond, msg) => {
 
   await page.fill('#inv-master-form input[name="name"]', 'E2E-CAT-' + TEST_ID);
   await page.selectOption('#inv-master-form select[name="stock_group_id"]', { value: groupId });
-  await page.fill('#inv-master-form textarea[name="description"]', 'Test category for E2E model');
+  await page.fill('#inv-master-form textarea[name="description"]', 'Test category for E2E');
   await page.click('#inv-master-form button[type="submit"]');
   await page.waitForTimeout(2000);
 
@@ -153,8 +142,6 @@ const assert = (cond, msg) => {
   db.close();
 
   // ─── Step 3: Navigate to Models (ModelPage) ───
-  // The 'models' card key resolves to the ModelPage in inventory-sub.js,
-  // reached via '#inventory/models'.
   console.log('\n[STEP 4] Navigating to Models (ModelPage) page');
   await page.evaluate(() => window.location.hash = '#inventory/models');
   await page.waitForTimeout(2000);
@@ -194,7 +181,7 @@ const assert = (cond, msg) => {
   await page.selectOption('#inv-master-form select[name="brand_id"]', { value: 'brand_001' });
   await page.waitForTimeout(500);
   console.log('[PASS] Brand selected (brand_001)');
-  await page.screenshot({ path: 'public/screenshots/model-form-with-brand.png' });
+
   // ─── Step 5: Attempt to create Model WITHOUT Stock Category ───
   console.log('\n[STEP 5] Attempting to create Model WITHOUT Stock Category');
   await page.fill('#inv-master-form input[name="name"]', 'E2E-MOD-' + TEST_ID + '-NOCAT');

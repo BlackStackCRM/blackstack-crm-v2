@@ -28,9 +28,10 @@ function assertTenantRef(conn, companyId, table, id) {
 }
 
 /** Validate a set of references: { contact_id: ..., organization_id: ... } */
-function assertTenantRefs(conn, companyId, refs) {
-  assertTenantRef(conn, companyId, 'contacts', refs.contact_id);
-  assertTenantRef(conn, companyId, 'organizations', refs.organization_id);
+function assertTenantRefs(conn, companyId, refs = {}) {
+  const safe = refs && typeof refs === 'object' ? refs : {};
+  assertTenantRef(conn, companyId, 'contacts', safe.contact_id);
+  assertTenantRef(conn, companyId, 'organizations', safe.organization_id);
 }
 
 module.exports = { assertTenantRef, assertTenantRefs };

@@ -1,5 +1,6 @@
 function camelToSnake(obj) {
   if (obj === null || typeof obj !== 'object') return obj;
+  if (obj instanceof Date) return obj; // Dates are not key/value maps
   if (Array.isArray(obj)) return obj.map(camelToSnake);
   const result = {};
   for (const [key, value] of Object.entries(obj)) {
@@ -11,6 +12,7 @@ function camelToSnake(obj) {
 
 function snakeToCamel(obj) {
   if (obj === null || typeof obj !== 'object') return obj;
+  if (obj instanceof Date) return obj; // Dates are not key/value maps
   if (Array.isArray(obj)) return obj.map(snakeToCamel);
   const result = {};
   for (const [key, value] of Object.entries(obj)) {

@@ -9,6 +9,12 @@ class Modal {
     this.previousActiveElement = null;
   }
 
+  escapeHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[char]);
+  }
+
   open() {
     this.previousActiveElement = document.activeElement;
     const root = document.getElementById('modal-root');
@@ -33,7 +39,7 @@ class Modal {
       <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" aria-hidden="true"></div>
       <div class="relative bg-surface-container-lowest rounded-xl shadow-2xl w-full ${sizeClasses[this.size] || sizeClasses.md} max-h-[90vh] flex flex-col animate-scale-in">
         <div class="flex items-center justify-between p-container-padding border-b border-outline-variant/30 shrink-0">
-          <h2 id="${this.id}-title" class="font-h3 text-h3 text-on-surface">${this.title}</h2>
+          <h2 id="${this.id}-title" class="font-h3 text-h3 text-on-surface">${this.escapeHTML(this.title)}</h2>
           <button class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container transition-colors" aria-label="Close modal" data-modal-close>
             <span class="material-symbols-outlined text-[20px] text-on-surface-variant">close</span>
           </button>

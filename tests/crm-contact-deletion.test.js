@@ -103,6 +103,7 @@ beforeAll(async () => {
     const src = path.join(ROOT, 'data', 'blackstack-crm.db' + ext);
     if (fs.existsSync(src)) fs.copyFileSync(src, testDb + ext);
   }
+  require(path.join(ROOT, 'tests/helpers/reset-cloned-test-admin.js'))(testDb);
 
   const now = new Date().toISOString();
   const db = new DatabaseSync(testDb);

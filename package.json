@@ -18,7 +18,8 @@
     "launcher:dev": "nodemon launcher/app.js",
     "migrate": "node server/database/migrate.js",
     "seed": "node server/database/seed.js",
-    "test": "vitest run",
+    "test": "vitest run && npm run test:native",
+    "test:native": "node --test tests/audit-opening-balance.test.js tests/create-ledger-account.regression.test.js tests/update-account-is-group.test.js && node tests/first-user-setup.test.js",
     "test:watch": "vitest",
     "lint": "eslint server/ public/js/",
     "format": "prettier --write \"**/*.{js,json,md}\"",
@@ -29,6 +30,7 @@
     "test:e2e:targeted": "node scripts/run-e2e-full.js --grep"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

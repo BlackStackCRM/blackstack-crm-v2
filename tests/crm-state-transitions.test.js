@@ -115,6 +115,7 @@ beforeAll(async () => {
     const src = path.join(ROOT, 'data', 'blackstack-crm.db' + s);
     if (fs.existsSync(src)) fs.copyFileSync(src, dbPath + s);
   }
+  require_(path.join(ROOT, 'tests/helpers/reset-cloned-test-admin.js'))(dbPath);
   {
     const seed = new DatabaseSync(dbPath);
     seed.prepare('UPDATE financial_years SET is_locked = 0 WHERE company_id = ?').run('default');

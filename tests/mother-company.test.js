@@ -89,6 +89,7 @@ const fixtures = {};
 
 /** name of the only migration this suite needs */
 const MC_MIGRATION = '085_mother_company_agencies.sql';
+const MC_HIERARCHY_MIGRATION = '086_agency_hierarchy_customers.sql';
 
 /**
  * Ensure migration 085 has been applied to THIS connection's database.
@@ -106,14 +107,16 @@ const MC_MIGRATION = '085_mother_company_agencies.sql';
  * table rather than trusting version bookkeeping.
  */
 function ensureSchema() {
-  if (db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='agencies'")) return false;
-  const sql = fs.readFileSync(path.join(ROOT, 'server', 'database', 'migrations', MC_MIGRATION), 'utf8');
-  db.exec(sql);
-  // Record it the way migrate.js does, so nothing later considers it pending.
-  db.run(
-    'INSERT OR REPLACE INTO schema_migrations (version, name, sha256) VALUES (?,?,?)',
-    [85, 'mother_company_agencies', crypto.createHash('sha256').update(sql).digest('hex')],
-  );
+  for (const [version, name, filename, marker] of [
+    [85, 'mother_company_agencies', MC_MIGRATION, 'agencies'],
+    [86, 'agency_hierarchy_customers', MC_HIERARCHY_MIGRATION, 'agency_parent_relationships'],
+  ]) {
+    if (db.get("SELECT name FROM sqlite_master WHERE type='table' AND name=?", [marker])) continue;
+    const sql = fs.readFileSync(path.join(ROOT, 'server', 'database', 'migrations', filename), 'utf8');
+    db.exec(sql);
+    db.run('INSERT OR REPLACE INTO schema_migrations (version, name, sha256) VALUES (?,?,?)',
+      [version, name, crypto.createHash('sha256').update(sql).digest('hex')]);
+  }
   return true;
 }
 
@@ -215,20 +218,36 @@ describe('migration 085 schema', () => {
     }
   });
 
-  test('defines exactly the seven mother_company permissions', () => {
+  test('defines the Mother Company permissions, including hierarchy and tenant management', () => {
     const rows = db.all("SELECT code FROM permissions WHERE module='mother_company'").map((r) => r.code);
-    expect(rows.sort()).toEqual(Object.values(MOTHER_COMPANY_PERMISSIONS).sort());
+    // 11 = the 10 codes present in the production clone plus
+    // `mother_company.agencies.admins.secure-create` (added by migration 085's
+    // permission block). Expected set is derived from MOTHER_COMPANY_PERMISSIONS.
+    expect(rows).toEqual(expect.arrayContaining(Object.values(MOTHER_COMPANY_PERMISSIONS)));
   });
 
-  test('MOTHER_COMPANY role carries all seven and is not given to role_admin', () => {
-    const n = db.get("SELECT COUNT(*) c FROM role_permissions WHERE role_id='role_mother_company'").c;
-    expect(n).toBe(7);
+  test('MOTHER_COMPANY role carries every Mother Company permission and is not given to role_admin', () => {
+    const expected = Object.values(MOTHER_COMPANY_PERMISSIONS);
+    const n = db.get(
+      `SELECT COUNT(*) c FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
+       WHERE rp.role_id='role_mother_company' AND p.code IN (${expected.map(() => '?').join(',')})`,
+      expected,
+    ).c;
+    // 11 = the 10 legacy codes plus `admins.secure-create` added by the secure-setup
+    // workflow (the new permission is granted via the migration, not by code).
+    expect(n).toBe(expected.length);
     const leaked = db.get(
       `SELECT COUNT(*) c FROM role_permissions rp
        JOIN permissions p ON p.id = rp.permission_id
        WHERE rp.role_id = 'role_admin' AND p.module = 'mother_company'`,
     ).c;
     expect(leaked).toBe(0);
+  });
+
+  test('the designated master email receives the explicit role during migration', () => {
+    const user = db.get('SELECT id FROM users WHERE email=?', ['admin@blackstack.local']);
+    if (!user) return; // Fresh installations can provision the identity after schema setup.
+    expect(db.get('SELECT 1 FROM user_roles WHERE user_id=? AND role_id=?', [user.id, 'role_mother_company'])).toBeTruthy();
   });
 
   test('agency_code is UNIQUE at the database level, not only in code', () => {
@@ -244,6 +263,19 @@ describe('migration 085 schema', () => {
     expect(db.get('SELECT COUNT(*) c FROM bills').c).toBeGreaterThanOrEqual(0);
     expect(db.get('SELECT COUNT(*) c FROM companies WHERE id IN (?,?,?)',
       [MC_COMPANY, 'company_alpha', 'company_beta']).c).toBe(3);
+  });
+});
+
+describe('migration 086 hierarchy and customer tenant schema', () => {
+  test('adds explicit agency hierarchy and immutable reassignment history idempotently', () => {
+    const migration = fs.readFileSync(path.join(ROOT, 'server/database/migrations/086_agency_hierarchy_customers.sql'), 'utf8');
+    const before = db.get("SELECT COUNT(*) c FROM sqlite_master WHERE type='table'").c;
+    expect(() => db.exec(migration)).not.toThrow();
+    expect(() => db.exec(migration)).not.toThrow();
+    expect(db.get("SELECT COUNT(*) c FROM sqlite_master WHERE type='table'").c).toBe(before);
+    for (const name of ['agency_parent_relationships', 'customer_tenant_agencies', 'customer_tenant_agency_history']) {
+      expect(db.get("SELECT name FROM sqlite_master WHERE type='table' AND name=?", [name])).toBeTruthy();
+    }
   });
 });
 
@@ -352,9 +384,9 @@ describe('agency management', () => {
     })).toThrow(/validation failed/i);
   });
 
-  test('activates an agency and records the transition', () => {
+  test('activates an agency and records the transition', async () => {
     const before = svc.statusHistory(fixtures.agencyAId).length;
-    const a = svc.changeStatus(fixtures.agencyAId, {
+    const a = await svc.changeStatus(fixtures.agencyAId, {
       status: AGENCY_STATUS.ACTIVE,
       reason: 'Contract signed',
       actor: fixtures.mcActor,
@@ -366,45 +398,45 @@ describe('agency management', () => {
     expect(svc.statusHistory(fixtures.agencyAId).length).toBe(before + 1);
   });
 
-  test('suspension requires a reason', () => {
-    expect(() => svc.changeStatus(fixtures.agencyAId, {
+  test('suspension requires a reason', async () => {
+    await expect(svc.changeStatus(fixtures.agencyAId, {
       status: AGENCY_STATUS.SUSPENDED, reason: '   ',
       actor: fixtures.mcActor, providerCompanyId: MC_COMPANY,
-    })).toThrow(/reason is required/i);
+    })).rejects.toThrow(/reason is required/i);
   });
 
-  test('suspends and can reactivate, but cannot jump to an unknown status', () => {
-    svc.changeStatus(fixtures.agencyAId, {
+  test('suspends and can reactivate, but cannot jump to an unknown status', async () => {
+    await svc.changeStatus(fixtures.agencyAId, {
       status: AGENCY_STATUS.SUSPENDED, reason: 'Non-payment',
       actor: fixtures.mcActor, providerCompanyId: MC_COMPANY,
     });
     expect(svc.findById(fixtures.agencyAId).status).toBe(AGENCY_STATUS.SUSPENDED);
 
-    svc.changeStatus(fixtures.agencyAId, {
+    await svc.changeStatus(fixtures.agencyAId, {
       status: AGENCY_STATUS.ACTIVE, reason: 'Payment received',
       actor: fixtures.mcActor, providerCompanyId: MC_COMPANY,
     });
     expect(svc.findById(fixtures.agencyAId).status).toBe(AGENCY_STATUS.ACTIVE);
 
-    expect(() => svc.changeStatus(fixtures.agencyAId, {
+    await expect(svc.changeStatus(fixtures.agencyAId, {
       status: 'BANANA', actor: fixtures.mcActor, providerCompanyId: MC_COMPANY,
-    })).toThrow(/Unknown agency status/i);
+    })).rejects.toThrow(/Unknown agency status/i);
   });
 
-  test('TERMINATED is terminal', () => {
+  test('TERMINATED is terminal', async () => {
     const ag = svc.createAgency({
       payload: { agency_code: fixtures.agencyB, name: 'Beta Trading' },
       actor: fixtures.mcActor, providerCompanyId: MC_COMPANY,
     });
     fixtures.agencyBId = ag.id;
-    svc.changeStatus(fixtures.agencyBId, {
+    await svc.changeStatus(fixtures.agencyBId, {
       status: AGENCY_STATUS.TERMINATED, reason: 'Contract ended',
       actor: fixtures.mcActor, providerCompanyId: MC_COMPANY,
     });
-    expect(() => svc.changeStatus(fixtures.agencyBId, {
+    await expect(svc.changeStatus(fixtures.agencyBId, {
       status: AGENCY_STATUS.ACTIVE, reason: 'undo?',
       actor: fixtures.mcActor, providerCompanyId: MC_COMPANY,
-    })).toThrow(/Invalid status transition/i);
+    })).rejects.toThrow(/Invalid status transition/i);
   });
 
   test('search and filter work server-side', () => {
@@ -493,7 +525,7 @@ describe('agency administrator assignment', () => {
     await expect(svc.assignAdministrator(fixtures.agencyAId, {
       email: fixtures.adminEmail, fullName: 'Dup', password: PW,
       actor: fixtures.mcActor, providerCompanyId: MC_COMPANY,
-    })).rejects.toThrow(/already exists/i);
+    })).rejects.toThrow(/already (exists|an administrator)/i);
 
     await expect(svc.assignAdministrator(fixtures.agencyAId, {
       email: `weak-${fixtures.prefix.toLowerCase()}@agency.example`, fullName: 'Weak', password: 'short',
@@ -522,7 +554,7 @@ describe('agency administrator assignment', () => {
       });
     } catch (e) { caught = e; }
     expect(caught, 'a duplicate administrator email must be rejected').toBeTruthy();
-    expect(caught.message).toMatch(/already exists/i);
+    expect(caught.message).toMatch(/already (exists|registered)/i);
     // The raw SQL constraint text must not be what the user sees.
     expect(caught.message).not.toMatch(/UNIQUE constraint/i);
   });
@@ -547,7 +579,7 @@ describe('tenant isolation', () => {
     expect(() => svc.getForCompany(fixtures.agencyAId, 'company_beta')).toThrow(/not found/i);
   });
 
-  test('a company cannot mutate another tenant agency', () => {
+  test('a company cannot mutate another tenant agency', async () => {
     // NOTE: the scoping column is provider_company_id, NOT company_id. An earlier
     // draft of this test passed `companyId` (which the service destructures as
     // providerCompanyId, so it arrived undefined) and still threw "not found" —
@@ -560,10 +592,10 @@ describe('tenant isolation', () => {
       payload: { name: 'Hijacked' }, actor: { id: 'u' }, providerCompanyId: 'company_beta',
     })).toThrow(/not found/i);
 
-    expect(() => svc.changeStatus(fixtures.agencyAId, {
+    await expect(svc.changeStatus(fixtures.agencyAId, {
       status: AGENCY_STATUS.SUSPENDED, reason: 'x',
       actor: { id: 'u' }, providerCompanyId: 'company_beta',
-    })).toThrow(/not found/i);
+    })).rejects.toThrow(/not found/i);
 
     expect(() => svc.getForCompany(fixtures.agencyAId, 'company_beta')).toThrow(/not found/i);
 

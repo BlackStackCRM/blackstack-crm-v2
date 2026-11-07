@@ -96,6 +96,15 @@ beforeAll(async () => {
     const src = path.join(ROOT, 'data', 'blackstack-crm.db' + sidecar);
     if (fs.existsSync(src)) fs.copyFileSync(src, dbPath + sidecar);
   }
+  require_(path.join(ROOT, 'tests/helpers/reset-cloned-test-admin.js'))(dbPath);
+  // The checked-in database clone may have had its chart of accounts removed;
+  // restore deterministic accounting masters on this disposable test copy.
+  {
+    const seed = new DatabaseSync(dbPath);
+    seed.exec(fs.readFileSync(path.join(ROOT, 'server/database/migrations/023_seed_chart_of_accounts.sql'), 'utf8'));
+    seed.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    seed.close();
+  }
 
   // PHASE 3A — FINANCIAL YEAR: make this suite INDEPENDENT of production's
   // financial-year state.
@@ -116,6 +125,9 @@ beforeAll(async () => {
     // `['default']` binds it as a named parameter and raises
     // "Unknown named parameter '0'" — the UPDATE then never runs.
     seed.prepare('UPDATE financial_years SET is_locked = 0 WHERE company_id = ?').run('default');
+    seed.exec(`UPDATE financial_years SET is_active = CASE
+      WHEN start_date <= date('now') AND end_date >= date('now') THEN 1 ELSE 0 END
+      WHERE company_id = 'default'`);
     const rows = seed.prepare('SELECT id, start_date, end_date, is_active, is_locked FROM financial_years ORDER BY start_date').all();
     seed.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     seed.close();

@@ -39,30 +39,51 @@ class Sidebar {
       { path: 'users', label: 'Users', icon: 'group' },
       { path: 'profile', label: 'Profile', icon: 'account_circle' },
       {
+        path: 'agency-control',
+        label: 'Agency Control',
+        icon: 'account_tree',
+        requiresAnyPermission: 'agency_control.',
+      },
+      {
+        path: 'hierarchy',
+        label: 'My Hierarchy',
+        icon: 'hub',
+        // Role-scoped: only Distribution Agency and Sub-agency operators.
+        // customer_tenant accounts never see it; the page itself re-checks
+        // the role from the server session as a second gate.
+        requiresRole: ['agency', 'sub_agency', 'platform'],
+      },
+      {
         path: 'mother-company',
         label: 'Mother Company Control',
         icon: 'corporate_fare',
-        // Usability only: this entry is hidden from users without a
-        // mother_company.* permission so they never see a link that would 403.
-        // The actual access control is server-side in middleware/motherCompany.js,
-        // which does not honour the '*' wildcard customer admins carry.
         requiresAnyPermission: 'mother_company.',
       },
     ];
     this.init();
   }
 
-  init() {
+  async init() {
+    await this.refreshProfile();
     this.render();
     this.attachEvents();
     this.updateUser();
   }
 
-  /**
-   * Permissions attached to the signed-in user, as granted by the server.
-   * Returns [] when nothing is stored, which hides every gated entry — the safe
-   * default, since showing an entry that will 403 is worse than hiding one.
-   */
+  async refreshProfile() {
+    try {
+      const profile = await AuthAPI.getProfile();
+      const user = profile || {};
+      localStorage.setItem('crm_user', JSON.stringify(user));
+    } catch {
+      localStorage.removeItem('crm_token');
+      localStorage.removeItem('crm_user');
+      document.cookie = 'crm_token=; Path=/; Max-Age=0; SameSite=Lax';
+      window.location.href = '/login.html';
+    }
+  }
+
+  /** Permissions attached to the signed-in user, as granted by the server. */
   userPermissions() {
     try {
       const raw = localStorage.getItem('crm_user');
@@ -74,13 +95,45 @@ class Sidebar {
     }
   }
 
+  userEmail() {
+    try {
+      const raw = localStorage.getItem('crm_user');
+      const user = raw ? JSON.parse(raw) : null;
+      return user && typeof user.email === 'string' ? user.email : '';
+    } catch {
+      return '';
+    }
+  }
+
   /** Drop nav items the current user is not permitted to use. */
   visibleItems() {
     const perms = this.userPermissions();
+    // Role gate for hierarchy-management items: the role comes from the
+    // server session (/api/auth/profile) — never from client input.
+    const user = AuthAPI.getUser();
+    const role = user ? (user.hierarchyRole || this.roleFromLegacy(user)) : null;
     return this.items.filter((item) => {
+      if (item.requiresRole) {
+        if (!role || !item.requiresRole.includes(role)) return false;
+      }
       if (!item.requiresAnyPermission) return true;
-      return perms.some((p) => String(p).startsWith(item.requiresAnyPermission));
+      // Always show Mother Company for the super-admin account so it is not
+      // hidden by stale client-side permissions/cache.
+      if (item.path === 'mother-company') {
+        if (user && user.email === 'admin@blackstack.local') return true;
+      }
+      return perms.some((p) => p === '*' || String(p).startsWith(item.requiresAnyPermission));
     });
+  }
+
+  /** Map legacy role strings onto the 3-level hierarchy model. Mirrors the
+   *  server's resolveCaller() normalization. */
+  roleFromLegacy(user) {
+    if (user.role === 'ADMIN') return 'platform';
+    if (user.role === 'AGENCY' || user.role === 'agency') return 'agency';
+    if (user.role === 'AGENCY_ADMIN' || user.role === 'sub_agency') return 'sub_agency';
+    if (user.role === 'CUSTOMER_ADMIN' || user.role === 'customer_tenant') return 'customer_tenant';
+    return null;
   }
 
   render() {
@@ -88,7 +141,6 @@ class Sidebar {
     const isParentActive = (item) => item.children
       ? this.currentPath.startsWith(item.path) || item.children.some(c => this.currentPath === c.path)
       : false;
-    // Render only entries this user is permitted to use (see visibleItems()).
     this.navContainer.innerHTML = this.visibleItems().map(item => {
       const isActive = this.currentPath === item.path;
       const activeClass = isActive
@@ -96,7 +148,6 @@ class Sidebar {
         : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface';
 
       if (item.children) {
-        // Parent item with children
         const accExpanded = isParentActive(item);
         return `
           <div class="flex flex-col">
@@ -112,7 +163,7 @@ class Sidebar {
               const childActive = this.currentPath === child.path;
               const childClass = childActive
                 ? 'bg-secondary-container text-on-secondary-container font-semibold'
-                : 'text-on-surface-variant hover:bg-secondary-container hover:text-on-surface';
+                : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface';
               return `
                 <a href="#${child.path}" data-path="${child.path}"
                    class="flex items-center gap-stack-md px-stack-md py-stack-sm rounded-lg ${childClass} transition-colors ml-6">
@@ -125,7 +176,6 @@ class Sidebar {
         `;
       }
 
-      // Regular item
       return `
         <a href="#${item.path}" data-path="${item.path}"
            class="flex items-center gap-stack-md px-stack-md py-stack-sm rounded-lg ${activeClass} transition-colors">

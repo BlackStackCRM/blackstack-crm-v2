@@ -56,6 +56,29 @@ async function migrate() {
 
     console.log(`Applying migration ${version}: ${name}`);
     const apply = conn.transaction(() => {
+      // Migration 091's SQL creates indexes for hierarchy columns. They are
+      // added here (inside the same transaction) because SQLite has no
+      // ADD COLUMN IF NOT EXISTS and older local databases may not have gone
+      // through the guarded production adapter that originally added them.
+      if (version === 91 || version === 92) {
+        const usersTable = conn.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'");
+        if (!usersTable) throw new Error(`users table must exist before migration ${version}`);
+        const userColumns = new Set(conn.all('PRAGMA table_info(users)').map((column) => column.name));
+        if (version === 91) {
+          if (!userColumns.has('hierarchy_role')) {
+            conn.exec("ALTER TABLE users ADD COLUMN hierarchy_role TEXT CHECK (hierarchy_role IN ('agency', 'sub_agency', 'customer_tenant'))");
+          }
+          if (!userColumns.has('parent_user_id')) {
+            conn.exec('ALTER TABLE users ADD COLUMN parent_user_id TEXT REFERENCES users(id) ON DELETE SET NULL');
+          }
+          if (!userColumns.has('must_change_password')) {
+            conn.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0');
+          }
+        }
+        if (version === 92 && !userColumns.has('supabase_user_id')) {
+          conn.exec('ALTER TABLE users ADD COLUMN supabase_user_id TEXT');
+        }
+      }
       conn.exec(content);
       conn.prepare('INSERT INTO schema_migrations (version, name, sha256) VALUES (?, ?, ?)').run(version, name, sha256);
     });

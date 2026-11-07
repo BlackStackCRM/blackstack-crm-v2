@@ -107,12 +107,19 @@ Provide exactly 3 actionable recommendations in JSON format:
         expectedResult: 'Complete task'
       }));
 
+      // FIX (dashboard blank-screen): this query referenced d.next_action,
+      // but the deals table has no such column (next_action lives on
+      // contacts — migration 018). The thrown "no such column" bubbled up
+      // through /dashboard/summary → renderActionCenter → ErrorState,
+      // blanking the whole dashboard. "Deals without a next step" now means
+      // deals whose linked contact has no next_action scheduled (or no
+      // contact at all).
       const dealsNoNextAction = this.conn.all(`
         SELECT d.*, c.first_name, c.last_name
         FROM deals d
         LEFT JOIN contacts c ON c.id = d.contact_id
         WHERE d.company_id = ? AND d.status = 'OPEN'
-        AND (d.next_action IS NULL OR d.next_action = '')
+        AND (c.id IS NULL OR c.next_action IS NULL OR c.next_action = '')
         ORDER BY d.updated_at ASC
       `, [companyId]);
       dealsNoNextAction.forEach(d => actions.push({

@@ -56,6 +56,7 @@ beforeAll(async () => {
     const src = path.join(ROOT, 'data', 'blackstack-crm.db' + ext);
     if (fs.existsSync(src)) fs.copyFileSync(src, testDb + ext);
   }
+  require(path.join(ROOT, 'tests/helpers/reset-cloned-test-admin.js'))(testDb);
 
   // A user bound to role_user, which the production seed grants 0 permissions.
   // Reuse the admin's bcrypt hash so the REAL login path accepts the password.

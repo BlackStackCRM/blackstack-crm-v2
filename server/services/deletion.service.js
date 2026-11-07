@@ -17,7 +17,7 @@
  *   - Raw SQLite errors never escape; callers get structured AppErrors.
  */
 const crypto = require('crypto');
-const { AppError, NotFoundError, AuthorizationError } = require('../utils/errors');
+const { AppError, NotFoundError } = require('../utils/errors');
 
 // ── Entity registry ────────────────────────────────────────────────────────
 // table: physical table name | label: UI name | permission: required RBAC
@@ -344,19 +344,13 @@ Object.assign(DeletionService.prototype, {
    * Performs a direct DELETE FROM. Related records are handled by the
    * database's CASCADE or by the caller via deleteEntityWithDependencies.
    */
-  archiveEntity(entityType, entityId, reason, context) {
-    // Archive is now permanent delete (no soft-delete).
+  archiveEntity(entityType) {
     const cfg = this._assertEntity(entityType);
-    if (context.permission !== undefined && !context.permission) {
-      throw new AuthorizationError('You are not allowed to delete this record.');
-    }
-    this._getRecord(cfg, entityId, context.companyId);
-    const tx = this.conn.transaction(() => {
-      this.conn.run(`DELETE FROM ${cfg.table} WHERE id = ? AND company_id = ?`, [entityId, context.companyId]);
-      this._audit('DELETE', entityType, entityId, context, { reason: reason || null });
-    });
-    tx();
-    return { success: true, deleted: true, entity_type: entityType, entity_id: entityId, reason: reason || null };
+    throw new AppError(
+      `${cfg.label} cannot be archived because this database has no soft-delete field. Use the dependency-checked delete flow if permanent deletion is required.`,
+      'ARCHIVE_NOT_SUPPORTED',
+      410,
+    );
   },
 
   /**

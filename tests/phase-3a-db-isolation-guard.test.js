@@ -180,7 +180,9 @@ describe('PHASE 3A — disposable DB guard regression', () => {
       const { DatabaseConnection } = require(path.join(ROOT, 'server/database/connection.js'));
       const { JournalEntryRepository } = require(path.join(ROOT, 'server/repositories/journal-entry.repository.js'));
       const conn = new DatabaseConnection().connect();
-      const [A, B] = conn.all("SELECT id FROM accounts WHERE company_id='default' AND is_active=1 LIMIT 2").map(r => r.id);
+      conn.exec(require('fs').readFileSync(path.join(ROOT, 'server/database/migrations/023_seed_chart_of_accounts.sql'), 'utf8'));
+      const accountIds = conn.all("SELECT id FROM accounts WHERE company_id='default' AND is_active=1 LIMIT 2").map(r => r.id);
+      const [A, B] = [accountIds[0], accountIds[1] || accountIds[0]];
       new JournalEntryRepository(conn).createWithValidation(
         { company_id: 'default', entry_date: '2026-01-01', description: 'guard-test',
           currency: 'INR', status: 'POSTED', created_by: 'admin' },

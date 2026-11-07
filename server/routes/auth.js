@@ -22,4 +22,22 @@ router.get('/profile', authMiddleware, controller.getProfile.bind(controller));
 router.put('/profile', authMiddleware, controller.updateProfile.bind(controller));
 router.put('/profile/password', authMiddleware, changePasswordValidation, handleValidation, controller.changePassword.bind(controller));
 
+// SETUP STATUS (public) — login.js probes this BEFORE showing the login
+// form. A 404 here disabled the login form entirely (showStoreError).
+// Returns { mode: 'setup'|'login', userCount } — read-only, no user data.
+router.get('/setup-status', controller.setupStatus.bind(controller));
+
+// CREATE FIRST USER (public) — 409 once any user exists. Returns a session
+// so the operator lands on the dashboard immediately after setup.
+router.post('/setup/first-user',
+  [
+    body('full_name').isString().trim().notEmpty().withMessage('Full name is required.'),
+    body('email').isString().trim().notEmpty().withMessage('A valid email address is required.'),
+    body('password').isString().isLength({ min: 8 }).withMessage('Password must be at least 8 characters.'),
+    body('confirm_password').custom((value, { req }) => value === req.body.password)
+      .withMessage('Passwords do not match.'),
+  ],
+  handleValidation,
+  controller.createFirstUser.bind(controller));
+
 module.exports = router;

@@ -206,6 +206,15 @@ window.PageModules.settings = {
             <p class="font-body-sm text-body-sm text-on-surface-variant mb-stack-md">Deletes ALL business data — contacts, deals, leads, invoices, payments, accounting entries, tasks and activities. Your user account and login settings are kept. This cannot be undone.</p>
             <button type="button" id="reset-crm-data" class="bg-error text-white px-4 py-2 rounded-lg hover:bg-error/90 font-body-md font-medium">Reset CRM data…</button>
           </div>
+          ${this._canManageSettings() ? `
+          <div class="bg-error-container/20 border border-error/30 rounded-lg p-stack-md mt-stack-md">
+            <p class="font-body-md text-on-surface font-medium mb-1">Factory data reset</p>
+            <p class="font-body-sm text-body-sm text-on-surface-variant mb-stack-md">Wipes the ENTIRE database and returns the CRM to its original factory state — business data <strong>and all user accounts</strong> are deleted, then the bootstrap administrator is re-created. You and every other user will be signed out and must log in with the bootstrap admin credentials. This cannot be undone.</p>
+            <button type="button" id="factory-reset" class="border border-error text-error px-4 py-2 rounded-lg hover:bg-error/10 font-body-md font-medium">Factory data reset…</button>
+          </div>
+          ` : `
+          <p class="font-body-sm text-body-sm text-on-surface-variant mt-stack-md">Factory data reset is available to administrator accounts only.</p>
+          `}
         </div>
         <div class="flex justify-end gap-stack-sm pt-stack-md border-t border-outline-variant/30">
           <button type="submit" class="bg-secondary text-on-secondary px-4 py-2 rounded-lg hover:bg-secondary/90">Save settings</button>
@@ -222,6 +231,18 @@ window.PageModules.settings = {
     container.querySelector('#export-data').addEventListener('click', () => Toast.info('Export started — you will be notified when ready'));
     container.querySelector('#import-data').addEventListener('click', () => Toast.info('Import wizard coming soon'));
     container.querySelector('#reset-crm-data').addEventListener('click', () => this.confirmResetCrmData());
+    const factoryBtn = container.querySelector('#factory-reset');
+    if (factoryBtn) factoryBtn.addEventListener('click', () => this.confirmFactoryReset());
+  },
+
+  // Factory reset is an admin-tier action: the API enforces settings.manage,
+  // so the button is only rendered for sessions that carry that permission.
+  _canManageSettings() {
+    try {
+      const user = JSON.parse(localStorage.getItem('crm_user') || '{}');
+      const perms = Array.isArray(user.permissions) ? user.permissions : [];
+      return perms.includes('*') || perms.includes('settings.manage');
+    } catch { return false; }
   },
 
   // ------------------ UPDATES TAB (desktop app only) ------------------
@@ -529,6 +550,77 @@ window.PageModules.settings = {
     }).catch(() => render({ status: 'OFFLINE', message: 'Could not reach update server. CRM continues normally.' }));
     setTimeout(() => { if (latest && latest.status === 'CHECKING') render({ status: 'OFFLINE', message: 'Update check timed out. The CRM works normally offline.' }); }, 12000);
     void off;
+  },
+
+  confirmFactoryReset() {
+    const modal = new Modal({
+      title: 'Factory data reset?',
+      size: 'md',
+      content: `
+        <div class="space-y-4">
+          <div class="bg-error-container/20 border border-error/30 rounded-lg p-3">
+            <p class="font-body-md text-on-surface font-medium">This wipes the ENTIRE database and restores the factory state:</p>
+            <ul class="font-body-sm text-body-sm text-on-surface-variant list-disc pl-5 mt-2 space-y-1">
+              <li>All business data — CRM, accounting, invoices, inventory</li>
+              <li><strong>All user accounts, including yours</strong> — everyone is signed out</li>
+              <li>Custom settings, notes and activity history</li>
+            </ul>
+          </div>
+          <p class="font-body-md text-on-surface">The CRM is re-seeded to its original state: the bootstrap administrator (<strong>admin@blackstack.local</strong>) is re-created and you must sign in with its credentials.</p>
+          <p class="font-body-sm text-body-sm text-on-surface-variant">This action cannot be undone. To confirm, type <strong>FACTORY RESET</strong> in the first field and enter <strong>your account password</strong> in the second.</p>
+          <div>
+            <label class="block font-label-md text-label-md text-on-surface-variant uppercase mb-1">Confirmation phrase — type exactly: FACTORY RESET</label>
+            <input id="factory-confirm-input" class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2 text-body-md focus:outline-none focus:ring-2 focus:ring-error/40" placeholder="FACTORY RESET" autocomplete="off" spellcheck="false"/>
+            <p id="factory-phrase-hint" class="font-body-sm text-body-sm text-on-surface-variant mt-1">Waiting for the exact phrase…</p>
+          </div>
+          <div>
+            <label class="block font-label-md text-label-md text-on-surface-variant uppercase mb-1">Your password (admin@blackstack.local)</label>
+            <input id="factory-confirm-password" type="password" autocomplete="current-password" class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2 text-body-md focus:outline-none focus:ring-2 focus:ring-error/40" placeholder="Your password"/>
+          </div>
+          <div class="flex justify-end gap-2 pt-2 border-t border-outline-variant/30">
+            <button type="button" data-modal-close class="px-4 py-2 rounded-lg hover:bg-surface-container text-on-surface">Cancel</button>
+            <button id="factory-confirm-btn" class="bg-error text-white px-5 py-2 rounded-lg hover:bg-error/90 font-medium" disabled>Wipe everything &amp; restore factory state</button>
+          </div>
+        </div>
+      `,
+    });
+    modal.open();
+
+    const input = modal.element.querySelector('#factory-confirm-input');
+    const passwordInput = modal.element.querySelector('#factory-confirm-password');
+    const hint = modal.element.querySelector('#factory-phrase-hint');
+    const btn = modal.element.querySelector('#factory-confirm-btn');
+    const phraseOk = () => input.value.trim().toUpperCase() === 'FACTORY RESET';
+    const validate = () => {
+      const ok = phraseOk() && passwordInput.value.length > 0;
+      btn.disabled = !ok;
+      btn.classList.toggle('opacity-50', !ok);
+      btn.classList.toggle('cursor-not-allowed', !ok);
+      // Live guidance so the user knows which field is the problem.
+      if (!input.value.trim()) { hint.textContent = 'Waiting for the exact phrase…'; hint.className = 'font-body-sm text-body-sm text-on-surface-variant mt-1'; }
+      else if (!phraseOk()) { hint.textContent = 'Phrase incorrect — it must read exactly: FACTORY RESET (not your email).'; hint.className = 'font-body-sm text-body-sm text-error mt-1'; }
+      else if (!passwordInput.value) { hint.textContent = '✓ Phrase correct — now enter your password below.'; hint.className = 'font-body-sm text-body-sm text-on-surface mt-1'; }
+      else { hint.textContent = '✓ Ready — press “Wipe everything & restore factory state”.'; hint.className = 'font-body-sm text-body-sm text-green-600 mt-1'; }
+    };
+    input.addEventListener('input', validate);
+    passwordInput.addEventListener('input', validate);
+    validate();
+    const submit = async () => {
+      btn.disabled = true;
+      btn.textContent = 'Resetting…';
+      try {
+        await API.post('/settings/factory-reset', { confirm: 'FACTORY RESET', password: passwordInput.value });
+        modal.close();
+        Toast.success('Factory reset complete. All users were removed — sign in with the bootstrap administrator account.');
+        setTimeout(() => { try { window.location.href = '/login.html'; } catch { /* keep session state */ } }, 2500);
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Wipe everything & restore factory state';
+        Toast.error(err.message || 'Factory reset failed');
+      }
+    };
+    btn.addEventListener('click', submit);
+    passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !btn.disabled) submit(); });
   },
 
   confirmResetCrmData() {

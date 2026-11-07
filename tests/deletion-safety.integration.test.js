@@ -165,8 +165,10 @@ describe('Delete Safety — protection & integrity', () => {
     expect(a1.status).toBe(404); // unknown entity -> 404, service never touches audit tables
     // Direct attempt: audit_logs is not in ENTITY_CONFIG
     const res = await api('POST', '/deletion/execute', { token, body: { entity_type: 'audit_log', entity_id: 'x', confirmationToken: 'y' } });
-    expect(res.status).toBe(400);
-    expect((await res.json()).error.code).toBe('UNKNOWN_ENTITY_TYPE');
+    // Unknown entity types fail closed at the delete-permission check before
+    // the service is reached; callers cannot probe internal entity support.
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe('AUTHORIZATION_ERROR');
     // Rows still present
     expect(dbQuery('SELECT COUNT(*) c FROM audit_logs').length).toBeGreaterThan(0);
   });

@@ -18,6 +18,12 @@ class DataTable {
     this.render();
   }
 
+  escapeHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[char]);
+  }
+
   render() {
     if (!this.container) return;
     this.container.innerHTML = '';
@@ -38,7 +44,7 @@ class DataTable {
       this.container.innerHTML = `
         <div class="flex flex-col items-center justify-center py-12 text-center">
           <span class="material-symbols-outlined text-[48px] text-on-surface-variant/40 mb-2">search_off</span>
-          <p class="font-body-sm text-body-sm text-on-surface-variant">${this.config.emptyState}</p>
+          <p class="font-body-sm text-body-sm text-on-surface-variant">${this.escapeHTML(this.config.emptyState)}</p>
         </div>
       `;
       return;
@@ -58,10 +64,10 @@ class DataTable {
             <th class="py-3 px-4 font-semibold ${col.align === 'right' ? 'text-right' : ''} ${col.sortable !== false && this.config.sortable ? 'group cursor-pointer hover:bg-surface-container transition-colors' : ''}" ${col.sortable !== false && this.config.sortable ? `data-sort="${col.key}"` : ''}>
               ${col.sortable !== false && this.config.sortable ? `
                 <div class="flex items-center gap-1 ${col.align === 'right' ? 'justify-end' : ''}">
-                  ${col.label}
+                  ${this.escapeHTML(col.label)}
                   <span class="material-symbols-outlined text-[14px] opacity-0 group-hover:opacity-100 transition-opacity">arrow_downward</span>
                 </div>
-              ` : col.label}
+              ` : this.escapeHTML(col.label)}
             </th>
           `).join('')}
           ${this.config.rowActions ? '<th class="py-3 pr-stack-md pl-2 w-12"></th>' : ''}
@@ -98,7 +104,7 @@ class DataTable {
         ` : ''}
         ${this.config.columns.map(col => `
           <td class="py-2.5 px-4 ${col.align === 'right' ? 'text-right' : ''} ${col.className || ''}">
-            ${col.render ? col.render(row[col.key], row) : row[col.key] ?? ''}
+            ${col.render ? col.render(row[col.key], row) : this.escapeHTML(row[col.key])}
           </td>
         `).join('')}
         ${this.config.rowActions ? `

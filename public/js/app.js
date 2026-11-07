@@ -11,6 +11,12 @@
     // mother_company.* permission, but the API guards are what actually protect
     // it — reaching this route directly yields an empty shell and 403s.
     'mother-company': { module: 'motherCompany' },
+    'agency-control': { module: 'agencyControl' },
+    // Role-scoped hierarchy management (agency / sub_agency only).
+    'hierarchy': { module: 'hierarchy' },
+    // Forced password change (must_change_password accounts only — the guard
+    // below blocks every other route until the flag clears).
+    'change-password': { module: 'changePassword' },
     'leads': { module: 'leads' },
     'leads/:id': { module: 'leadDetail', param: 'id' },
     'contacts': { module: 'contacts' },
@@ -99,6 +105,23 @@
   async function loadPage(hash) {
     const main = document.getElementById('page-container');
     if (!main) return;
+
+    // FIX (sub-agency login loop): an account created by its parent signs in
+    // with a ONE-TIME password and must_change_password = true. Until that
+    // flag is cleared, every other route is blocked and the operator is held
+    // on the Change Password screen. Without this guard the app loads the
+    // dashboard, whose API calls can fail for the half-provisioned identity,
+    // and the 401/403 interceptor bounces the user back to login — the loop.
+    let cpUser = null;
+    try { cpUser = JSON.parse(localStorage.getItem('crm_user') || 'null'); } catch {}
+    if (cpUser && cpUser.mustChangePassword && hash !== 'change-password') {
+      window.location.hash = '#change-password';
+      loadPage('change-password');
+      return;
+    }
+    if (cpUser && cpUser.mustChangePassword && hash === 'change-password') {
+      // allowed — fall through to normal rendering
+    }
 
     if (currentCleanup) {
       try { currentCleanup(); } catch (e) {}

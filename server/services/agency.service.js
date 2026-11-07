@@ -24,6 +24,7 @@
 const { ValidationError, NotFoundError } = require('../utils/errors');
 const { generateId } = require('../utils/generateId');
 const { PasswordService } = require('../auth/password');
+const { forwardAgencyToCloud } = require('../services/supabase.service');
 
 /** Valid agency states (mirrors the CHECK constraint in migration 085). */
 const AGENCY_STATUS = Object.freeze({
@@ -259,6 +260,106 @@ class AgencyService {
     return { total, agencies: rows };
   }
 
+  /**
+   * Read agencies DIRECTLY from Supabase Cloud (read-through).
+   *
+   * Used by the Mother Company dashboard for reads. This is the primary
+   * source of truth for the agency list on the Mother Company page.
+   *
+   * Returns the same shape as `list()`: { total, agencies: [...] }.
+   * Field names are snake_case (matching the Supabase schema); the global
+   * snakeToCamel response middleware converts them to camelCase for the
+   * frontend.
+   */
+  async listFromSupabase({ providerCompanyId, search, status, isActive, limit = 50, offset = 0 } = {}) {
+    const { isConfigured, getSupabaseClient } = require('../config/supabase');
+    if (!isConfigured()) {
+      throw new Error('Supabase not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing).');
+    }
+    const client = getSupabaseClient();
+
+    const lim = Math.min(Number(limit) || 50, 200);
+    const off = Math.max(Number(offset) || 0, 0);
+
+    // Build the count query — must apply the same base filter as the data query.
+    let countQ = client
+      .from('agencies')
+      .select('id', { count: 'exact', head: true })
+      .eq('provider_company_id', providerCompanyId);
+
+    // Build the data query.
+    let q = client
+      .from('agencies')
+      .select('id, agency_code, name, legal_name, contact_name, contact_email, contact_phone, city, state, country, status, is_active, activated_at, suspended_at, created_at, updated_at')
+      .eq('provider_company_id', providerCompanyId)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(off, off + lim - 1);
+
+    // Apply optional filters to both queries.
+    if (search) {
+      const ilike = `%${search}%`;
+      countQ = countQ.or(`name.ilike.${ilike},agency_code.ilike.${ilike},contact_email.ilike.${ilike},contact_name.ilike.${ilike}`);
+      q = q.or(`name.ilike.${ilike},agency_code.ilike.${ilike},contact_email.ilike.${ilike},contact_name.ilike.${ilike}`);
+    }
+    if (status) {
+      countQ = countQ.eq('status', status);
+      q = q.eq('status', status);
+    }
+    if (isActive !== undefined && isActive !== null && isActive !== '') {
+      const boolVal = isActive === true || isActive === 'true' || isActive === 1;
+      countQ = countQ.eq('is_active', boolVal ? 1 : 0);
+      q = q.eq('is_active', boolVal ? 1 : 0);
+    }
+
+    const countRes = await countQ;
+    if (countRes.error) {
+      throw new Error(countRes.error.message || 'Supabase count query failed');
+    }
+    const total = countRes.count || 0;
+
+    const { data, error } = await q;
+    if (error) {
+      throw new Error(error.message || 'Supabase agencies query failed');
+    }
+
+    return { total, agencies: data || [] };
+  }
+
+  /**
+   * Fetch a single agency by UUID from Supabase.
+   * Throws if not found or Supabase is unavailable.
+   */
+  async getByIdFromSupabase(id) {
+    const { isConfigured, getSupabaseClient } = require('../config/supabase');
+    if (!isConfigured()) {
+      throw new Error('Supabase not configured');
+    }
+    const client = getSupabaseClient();
+    let { data, error } = await client
+      .from('agencies')
+      .select('id, company_id, provider_company_id, agency_code, name, legal_name, contact_name, contact_email, contact_phone, address, city, state, country, pincode, status, is_active, activated_at, suspended_at, created_at, updated_at')
+      .eq('id', id)
+      .limit(1);
+
+    if (error || !data || data.length === 0) {
+      const byCode = await client
+        .from('agencies')
+        .select('id, company_id, provider_company_id, agency_code, name, legal_name, contact_name, contact_email, contact_phone, address, city, state, country, pincode, status, is_active, activated_at, suspended_at, created_at, updated_at')
+        .eq('agency_code', id)
+        .limit(1);
+      if (byCode.error) {
+        throw new Error(byCode.error.message || 'Supabase agency lookup failed');
+      }
+      if (byCode.data && byCode.data[0]) {
+        return byCode.data[0];
+      }
+      throw new NotFoundError('Agency', id);
+    }
+
+    return data[0];
+  }
+
   listAdministrators(agencyId) {
     return this.db.all(
       `SELECT a.id, a.user_id, a.role_code, a.status, a.assigned_at, a.revoked_at,
@@ -348,7 +449,7 @@ class AgencyService {
       });
     }
 
-    return this.db.transaction(() => {
+    const agency = this.db.transaction(() => {
       const agencyId = generateId('agy');
 
       // The agency gets its own company row, so its users are ordinary users of
@@ -385,6 +486,16 @@ class AgencyService {
 
       return this.findById(agencyId);
     })();
+
+    // Best-effort cloud sync after local commit. A Supabase failure must not
+    // undo the local creation; the retry worker will retry later.
+    try {
+      forwardAgencyToCloud(this.db, agency, actor);
+    } catch (syncErr) {
+      console.warn('[cloud-sync] agency creation sync failed, local creation succeeded:', syncErr.message);
+    }
+
+    return agency;
   }
 
   updateAgency(id, { payload, actor, providerCompanyId, req }) {
@@ -417,15 +528,31 @@ class AgencyService {
   }
 
   /** Activate / suspend / terminate with transition validation + history. */
-  changeStatus(id, { status, reason, actor, providerCompanyId, req }) {
-    const agency = this.getForCompany(id, providerCompanyId);
+  async changeStatus(id, { status, reason, actor, providerCompanyId, req }) {
+    let agency;
+    try {
+      agency = this.getForCompany(id, providerCompanyId);
+    } catch (err) {
+      // Local lookup failed — the agency may exist only in Supabase. Try a
+      // direct cloud lookup by UUID or agency code so we can create a local
+      // stub and keep the rest of the flow unchanged.
+      const { isConfigured, getSupabaseClient } = require('../config/supabase');
+      if (!isConfigured()) throw err;
+      const client = getSupabaseClient();
+      const cloud = await this._findSupabaseAgency(client, id);
+      if (!cloud) throw err;
+      await this._ensureLocalAgencyStub(cloud, providerCompanyId);
+      agency = this.getForCompany(id, providerCompanyId);
+    }
 
     if (!Object.values(AGENCY_STATUS).includes(status)) {
       throw new ValidationError(`Unknown agency status "${status}".`);
     }
+    if (agency.status === status) {
+      return this.findById(id);
+    }
     AgencyService.assertTransition(agency.status, status);
 
-    // A suspension without a reason is not auditable — require one.
     if (status === AGENCY_STATUS.SUSPENDED && (!reason || !String(reason).trim())) {
       throw new ValidationError('A reason is required to suspend an agency.');
     }
@@ -454,8 +581,66 @@ class AgencyService {
         newValues: { status, is_active: isActive, reason: reason || null },
         req,
       });
-      return this.findById(id);
+      const updated = this.findById(id);
+      try { this._syncAgencyToCloud(this.db, updated, actor); } catch {}
+      return updated;
     })();
+  }
+
+  async _findSupabaseAgency(client, idOrCode) {
+    const selectCols = 'id, company_id, provider_company_id, agency_code, name, legal_name, contact_name, contact_email, contact_phone, address, city, state, country, pincode, status, is_active';
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let query;
+    if (uuidRe.test(idOrCode)) {
+      query = client.from('agencies').select(selectCols).eq('id', idOrCode).limit(1);
+    } else {
+      query = client.from('agencies').select(selectCols).eq('agency_code', idOrCode).limit(1);
+    }
+    const { data, error } = await query;
+    if (error) {
+      console.warn('[agency] Supabase lookup failed:', error.message || error);
+      return null;
+    }
+    return data && data[0] ? data[0] : null;
+  }
+
+  _syncAgencyToCloud(db, agency, actor) {
+    if (!agency || !db) return;
+    try {
+      const { forwardAgencyToCloud } = require('../services/supabase.service');
+      console.log('[SYNC] _syncAgencyToCloud called for agency:', agency.id);
+      forwardAgencyToCloud(db, agency, actor || {});
+    } catch (e) {
+      console.error('[SYNC] _syncAgencyToCloud threw:', e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async _ensureLocalAgencyStub(cloud, providerCompanyId) {
+    const companyId = cloud.company_id || `company_${cloud.id}`;
+    this.db.run(
+      `INSERT OR IGNORE INTO companies (id, name, status) VALUES (?,?,?)`,
+      [companyId, cloud.name || cloud.agency_code, 'ACTIVE'],
+    );
+    this.db.run(
+      `INSERT OR IGNORE INTO agencies (id, company_id, provider_company_id, agency_code, name, legal_name, contact_name, contact_email, contact_phone, city, state, country, status, is_active)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        cloud.id,
+        companyId,
+        cloud.provider_company_id || providerCompanyId,
+        cloud.agency_code,
+        cloud.name,
+        cloud.legal_name,
+        cloud.contact_name,
+        cloud.contact_email,
+        cloud.contact_phone,
+        cloud.city,
+        cloud.state,
+        cloud.country,
+        cloud.status || 'PENDING',
+        cloud.is_active !== undefined ? Number(cloud.is_active) : 0,
+      ],
+    );
   }
 
   /**
@@ -470,8 +655,20 @@ class AgencyService {
    * established by the Mother Company operator, and the account is inactive
    * until they set it.
    */
-  async assignAdministrator(agencyId, { email, fullName, password, username, actor, providerCompanyId, req }) {
-    const agency = this.getForCompany(agencyId, providerCompanyId);
+  async assignAdministrator(agencyId, { email, fullName, password, username, actor, providerCompanyId, req, agency }) {
+    if (!agency) {
+      try {
+        agency = this.getForCompany(agencyId, providerCompanyId);
+      } catch (err) {
+        const { isConfigured, getSupabaseClient } = require('../config/supabase');
+        if (!isConfigured()) throw err;
+        const client = getSupabaseClient();
+        const cloud = await this._findSupabaseAgency(client, agencyId);
+        if (!cloud) throw err;
+        await this._ensureLocalAgencyStub(cloud, providerCompanyId);
+        agency = this.getForCompany(agencyId, providerCompanyId);
+      }
+    }
 
     if (!email || !EMAIL_RE.test(String(email).trim())) {
       throw new ValidationError('A valid administrator email address is required.');
@@ -494,12 +691,11 @@ class AgencyService {
     const passwordHash = await PasswordService.hash(password);
 
     return this.db.transaction(() => {
-      if (this.db.get('SELECT id FROM users WHERE email = ?', [mail])) {
-        throw new ValidationError('A user with that email address already exists.');
-      }
-
       // Reuse an existing AGENCY_ADMIN role if THIS COMPANY has one, otherwise
       // create a scoped role carrying only that agency's CRM permissions.
+      // (Moved ABOVE the user handling: the previous edit placed the
+      // user_roles INSERT before this block's `let role` declaration, which
+      // threw "Cannot access 'role' before initialization" at runtime.)
       //
       // The role CODE must be unique per company, and roles.code is declared
       // globally UNIQUE (not (company_id, code)). Inserting a literal
@@ -550,30 +746,129 @@ class AgencyService {
         }
       }
 
-      const userId = generateId('usr');
-      this.db.run(
-        `INSERT INTO users (id, company_id, username, email, password_hash, full_name, role, status)
-         VALUES (?,?,?,?,?,?,?,?)`,
-        [
-          userId,
-          agency.company_id,
-          username ? String(username).trim() : null,
-          mail,
-          // Hashed above; the plaintext is never stored, logged or audited.
-          passwordHash,
-          String(fullName).trim(),
-          'USER',
-          'ACTIVE',
-        ],
+      // FIX (reassign-after-revoke): a previously revoked administrator leaves
+      // a users row behind (audit-trail design: revoke deactivates, never
+      // deletes). Re-assigning the same email then hit the UNIQUE email
+      // constraint and surfaced "A user with that email address already
+      // exists." even though the operator had clearly removed the admin.
+      // Reactivate-and-reuse instead: same row, new password, back to ACTIVE,
+      // re-linked to the agency. A genuinely DIFFERENT email still inserts
+      // fresh; an ACTIVE user with the same email remains a real conflict.
+      // FIX (MC-assign flow, task 1c/d): handle an existing ACTIVE user with
+      // this email instead of failing outright. Cases:
+      //   * INACTIVE user  → reactivate (revoked admin coming back).
+      //   * ACTIVE + already admin of THIS agency → friendly 400.
+      //   * ACTIVE + admin of a DIFFERENT agency → 409 conflict (clear and
+      //     actionable; multi-agency admin roles are not supported yet).
+      //   * ACTIVE + no admin link (plain CRM user, e.g. a customer contact)
+      //     → LINK them: grant the AGENCY_ADMIN role, insert the
+      //     agency_administrators row, mark for password reset. The operator
+      //     explicitly chose this email, so linking is the intended action;
+      //     the one-time password still forces a credential set.
+      const existing = this.db.get(
+        'SELECT id, status, company_id, role FROM users WHERE email = ?',
+        [mail],
       );
+      let userId;
+      let linkedExistingUser = false;
+      if (existing && existing.status === 'INACTIVE') {
+        userId = existing.id;
+        this.db.run(
+          `UPDATE users SET status='ACTIVE', password_hash=?, full_name=?, company_id=?, hierarchy_role=COALESCE(hierarchy_role, 'agency'), updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+          [passwordHash, String(fullName).trim(), agency.company_id, userId],
+        );
+      } else if (existing) {
+        const alreadyHere = this.db.get(
+          "SELECT id, status FROM agency_administrators WHERE user_id = ? AND agency_id = ?",
+          [existing.id, agencyId],
+        );
+        if (alreadyHere) {
+          throw new ValidationError('User is already an administrator for this agency.');
+        }
+        const elsewhere = this.db.get(
+          "SELECT id FROM agency_administrators WHERE user_id = ?",
+          [existing.id],
+        );
+        if (elsewhere) {
+          const conflict = new ValidationError(
+            'This email is already registered to another agency. Please use a different email or contact support.',
+          );
+          conflict.code = 'CONFLICT';
+          conflict.status = 409;
+          throw conflict;
+        }
+        // LINK an existing ACTIVE user (no admin link anywhere): grant the
+        // agency's admin role, reset credentials to the one-time password,
+        // and mark must_change_password so they set their own on first login.
+        // hierarchy_role is the authority column for access decisions
+        // (resolveCaller reads it); users.role is kept in sync for consistency.
+        userId = existing.id;
+        linkedExistingUser = true;
+        this.db.run(
+          `UPDATE users SET status='ACTIVE', password_hash=?, full_name=?, company_id=?,
+             role='AGENCY_ADMIN', hierarchy_role='agency', must_change_password=1, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+          [passwordHash, String(fullName).trim(), agency.company_id, userId],
+        );
+      } else {
+        userId = generateId('usr');
+        this.db.run(
+          `INSERT INTO users (id, company_id, username, email, password_hash, full_name, role, status)
+           VALUES (?,?,?,?,?,?,?,?)`,
+          [
+            userId,
+            agency.company_id,
+            username ? String(username).trim() : null,
+            mail,
+            // Hashed above; the plaintext is never stored, logged or audited.
+            passwordHash,
+            String(fullName).trim(),
+            'USER',
+            'ACTIVE',
+          ],
+        );
+      }
       this.db.run('INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?,?)', [userId, role.id]);
 
-      const linkId = generateId('aad');
-      this.db.run(
-        `INSERT INTO agency_administrators (id, agency_id, user_id, company_id, role_code, assigned_by)
-         VALUES (?,?,?,?,?,?)`,
-        [linkId, agencyId, userId, agency.company_id, 'AGENCY_ADMIN', actor ? actor.id : null],
+      // FIX (reactivate path): agency_administrators has UNIQUE(user_id) —
+      // a revoked (REVOKED) link row still occupies the user's slot, so a
+      // fresh INSERT violates it. When a REVOKED link exists for this user,
+      // revive THAT row (back to ACTIVE, cleared revocation, refreshed
+      // assignment metadata) instead of inserting a duplicate. A genuinely
+      // new user takes the INSERT path. A user linked to a DIFFERENT agency
+      // was already rejected above (409), so this branch is unreachable for
+      // them.
+      const existingLink = this.db.get(
+        'SELECT id, agency_id, status FROM agency_administrators WHERE user_id = ?',
+        [userId],
       );
+      let linkId;
+      if (existingLink) {
+        if (existingLink.agency_id !== agencyId) {
+          const conflict = new ValidationError(
+            'This email is already registered to another agency. Please use a different email or contact support.',
+          );
+          conflict.code = 'CONFLICT';
+          conflict.status = 409;
+          throw conflict;
+        }
+        if (existingLink.status !== 'REVOKED') {
+          throw new ValidationError('User is already an administrator for this agency.');
+        }
+        linkId = existingLink.id;
+        this.db.run(
+          `UPDATE agency_administrators
+           SET status='ACTIVE', revoked_at=NULL, revoked_by=NULL, assigned_by=?, assigned_at=CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [actor ? actor.id : null, linkId],
+        );
+      } else {
+        linkId = generateId('aad');
+        this.db.run(
+          `INSERT INTO agency_administrators (id, agency_id, user_id, company_id, role_code, assigned_by)
+           VALUES (?,?,?,?,?,?)`,
+          [linkId, agencyId, userId, agency.company_id, 'AGENCY_ADMIN', actor ? actor.id : null],
+        );
+      }
 
       this.audit({
         actorId: actor ? actor.id : null,

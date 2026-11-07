@@ -15,7 +15,7 @@ const handle = (req, res, next) => {
 };
 
 router.get('/', authMiddleware, requirePermission('products.view'), controller.list.bind(controller));
-router.get('/:id', authMiddleware, controller.getOne.bind(controller));
+router.get('/:id', authMiddleware, requirePermission('products.view'), controller.getOne.bind(controller));
 router.post('/', authMiddleware, requirePermission('products.create'),
   [body('name').notEmpty()], handle, controller.create.bind(controller));
 router.put('/:id', authMiddleware, requirePermission('products.edit'), controller.update.bind(controller));

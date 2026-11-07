@@ -19,7 +19,7 @@ const CURRENCY_NAMES = {
 
 const CURRENCY_LOCALES = {
   USD: 'en-US',
-  EUR: 'en-EU',
+  EUR: 'en-IE',
   GBP: 'en-GB',
   INR: 'en-IN',
 };

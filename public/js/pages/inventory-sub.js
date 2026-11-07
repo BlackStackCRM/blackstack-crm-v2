@@ -140,7 +140,7 @@
       container.appendChild(content);
 
       this.bindEvents(container);
-      await this.load();
+      return this.load();
     }
 
     bindEvents(container) {

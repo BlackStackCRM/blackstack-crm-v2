@@ -68,6 +68,10 @@ function portInUse(port) {
     const src = path.join(ROOT, 'data', 'blackstack-crm.db' + s);
     if (fs.existsSync(src)) fs.copyFileSync(src, testDb + s);
   }
+  // The source DB can contain a disabled admin with an operator-specific
+  // password. Normalize credentials on this disposable clone so E2E exercises
+  // browser behavior instead of depending on local operator account state.
+  require(path.join(ROOT, 'tests', 'helpers', 'reset-cloned-test-admin'))(testDb);
 
   // Unlock financial years ON THE CLONE. Production's lock state is a separate,
   // still-open question and must not influence test outcomes.
