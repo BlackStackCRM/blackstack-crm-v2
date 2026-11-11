@@ -79,12 +79,29 @@ async function migrate() {
           conn.exec('ALTER TABLE users ADD COLUMN supabase_user_id TEXT');
         }
       }
+      if (version === 97) {
+        for (const table of ['subscription_plans', 'subscriptions']) {
+          const columns = new Set(conn.all(`PRAGMA table_info(${table})`).map((column) => column.name));
+          if (!columns.has('duration_unit')) conn.exec(`ALTER TABLE ${table} ADD COLUMN duration_unit TEXT NOT NULL DEFAULT 'day' CHECK (duration_unit IN ('day','month','year'))`);
+          if (!columns.has('duration_value')) conn.exec(`ALTER TABLE ${table} ADD COLUMN duration_value INTEGER NOT NULL DEFAULT 1 CHECK (duration_value > 0)`);
+        }
+      }
       conn.exec(content);
+      if (version === 99) {
+        const violations = conn.all('PRAGMA foreign_key_check');
+        if (violations.length) throw new Error(`Foreign key check failed after migration 099 (${violations.length} violation(s)).`);
+      }
       conn.prepare('INSERT INTO schema_migrations (version, name, sha256) VALUES (?, ?, ?)').run(version, name, sha256);
     });
     try {
+      // Migration 099 rebuilds subscriptions to permit the PENDING state.
+      // Disable FK enforcement only around that atomic schema migration so
+      // SQLite does not reject replacing the referenced parent table.
+      if (version === 99) conn.exec('PRAGMA foreign_keys = OFF');
       apply();
+      if (version === 99) conn.exec('PRAGMA foreign_keys = ON');
     } catch (err) {
+      if (version === 99) conn.exec('PRAGMA foreign_keys = ON');
       throw new Error(`Migration ${version}_${name} failed: ${err.message}. Halting — partial state preserved in schema_migrations for diagnosis.`);
     }
     appliedCount++;

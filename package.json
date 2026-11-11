@@ -19,7 +19,7 @@
     "migrate": "node server/database/migrate.js",
     "seed": "node server/database/seed.js",
     "test": "vitest run && npm run test:native",
-    "test:native": "node --test tests/audit-opening-balance.test.js tests/create-ledger-account.regression.test.js tests/update-account-is-group.test.js && node tests/first-user-setup.test.js",
+    "test:native": "node --test tests/audit-opening-balance.test.js tests/create-ledger-account.regression.test.js tests/update-account-is-group.test.js tests/subscription-payment-idempotency.test.cjs && node tests/first-user-setup.test.js",
     "test:watch": "vitest",
     "lint": "eslint server/ public/js/",
     "format": "prettier --write \"**/*.{js,json,md}\"",

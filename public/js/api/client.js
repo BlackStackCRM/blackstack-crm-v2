@@ -1,4 +1,62 @@
 const API_BASE = '/api';
+let isSubscriptionModalOpen = false;
+let subscriptionModalSnoozed = false;
+let subscriptionReturnHash = null;
+
+function showSubscriptionModal() {
+  if (isSubscriptionModalOpen || subscriptionModalSnoozed || typeof document === 'undefined') return;
+  isSubscriptionModalOpen = true;
+  subscriptionReturnHash = window.location.hash && window.location.hash !== '#wallet'
+    ? window.location.hash : (subscriptionReturnHash || '#dashboard');
+  let overlay = document.getElementById('subscription-inactive-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'subscription-inactive-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'subscription-inactive-title');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.72);padding:24px';
+    overlay.innerHTML = '<section style="width:min(100%,520px);background:#fff;border-radius:16px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.35);color:#172033"><h2 id="subscription-inactive-title" style="font-size:24px;font-weight:700;margin:0 0 12px">Subscription Inactive</h2><p style="line-height:1.6;margin:0 0 24px">Your subscription is not active. Please recharge your wallet immediately to continue using the software.</p><button id="subscription-go-wallet" type="button" style="background:#155eef;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:600;cursor:pointer">Go to Wallet</button></section>';
+    // Deliberately no close affordance or outside-click handler.
+    document.body.appendChild(overlay);
+    overlay.querySelector('#subscription-go-wallet').addEventListener('click', () => {
+      subscriptionModalSnoozed = true;
+      hideSubscriptionModal();
+      if (window.location.hash === '#wallet') {
+        window.dispatchEvent(new CustomEvent('page:navigate', { detail: { path: 'wallet' } }));
+      } else window.location.hash = '#wallet';
+    });
+  }
+  overlay.style.display = 'flex';
+}
+
+function hideSubscriptionModal() {
+  const overlay = typeof document !== 'undefined' && document.getElementById('subscription-inactive-overlay');
+  if (overlay) overlay.style.display = 'none';
+  isSubscriptionModalOpen = false;
+}
+
+async function recoverSubscriptionAccess() {
+  try {
+    const response = await API.get('/wallet/subscription', {}, { silent: true });
+    const sub = response && response.subscription;
+    const endDate = sub && (sub.endDate || sub.expiresAt);
+    if (!sub || sub.status !== 'ACTIVE' || !endDate || new Date(endDate).getTime() < Date.now()) return false;
+    subscriptionModalSnoozed = false;
+    hideSubscriptionModal();
+    const route = (subscriptionReturnHash || '#dashboard').replace(/^#/, '');
+    if (window.location.hash === '#wallet') {
+      window.location.hash = `#${route}`;
+    } else {
+      window.dispatchEvent(new CustomEvent('page:navigate', { detail: { path: window.location.hash.replace(/^#/, '') || route } }));
+    }
+    subscriptionReturnHash = null;
+    return true;
+  } catch (error) {
+    console.warn('[subscription] status recheck failed:', error && error.message);
+    return false;
+  }
+}
 
 async function request(method, endpoint, data = null, options = {}) {
   const url = `${API_BASE}${endpoint}`;
@@ -32,7 +90,8 @@ async function request(method, endpoint, data = null, options = {}) {
     if (!response.ok || (result.success === false && !response.ok)) {
       const error = new Error(result.error?.message || 'Request failed');
       error.status = response.status;
-      error.code = result.error?.code;
+      error.code = result.error?.code || (typeof result.error === 'string' ? result.error : undefined);
+      error.retryAfter = response.headers.get('Retry-After');
       // Attach the full error payload so callers can extract per-field details
       // (e.g. ValidationError.fields) instead of only the generic message.
       error.body = result;
@@ -54,8 +113,40 @@ async function request(method, endpoint, data = null, options = {}) {
     // logout here caused the sub-agency login LOOP (login OK → dashboard
     // 403 → logout → login …). Keep the session, route to the forced
     // change-password screen; the change clears the flag.
-    if (error.status === 401) {
+    if (error.status === 429) {
+      const retryAfter = Number(error.retryAfter);
+      const waitMessage = Number.isFinite(retryAfter) && retryAfter > 0
+        ? ` Please try again in ${retryAfter} seconds.`
+        : ' Please wait a moment and try again.';
+      if (!options.silent && typeof Toast !== 'undefined') {
+        Toast.error(`Too many requests.${waitMessage}`);
+      }
+      throw error;
+    }
+    const authMessage = (error.body && error.body.error && error.body.error.message)
+      || error.message || '';
+    const subscriptionError = error.status === 403 && error.code === 'SUBSCRIPTION_INACTIVE';
+    if (subscriptionError) {
+      if (window.location.hash !== '#wallet') subscriptionModalSnoozed = false;
+      showSubscriptionModal();
+      throw error;
+    }
+    const invalidSessionToken = error.status === 401
+      && /invalid or expired token/i.test(authMessage);
+    if (invalidSessionToken) {
+      let cachedUser = {};
+      try { cachedUser = JSON.parse(localStorage.getItem('crm_user') || '{}'); } catch { /* ignore */ }
+      if (cachedUser.email === 'admin@blackstack.local') {
+        // Temporary diagnostic requested for the super-admin redirect loop.
+        console.warn('[session-debug] Super-admin request rejected; redirecting to login.', {
+          endpoint, status: error.status, response: error.body,
+        });
+      }
       handleUnauthorized('Your session has expired. Please log in again.');
+      throw error;
+    }
+    if (error.status === 401) {
+      if (!options.silent && typeof Toast !== 'undefined') Toast.error(authMessage || 'Request was not authorized.');
       throw error;
     }
     // ENDPOINT-SCOPED SOFT FAILURES: decorative endpoints whose failure must
@@ -64,9 +155,6 @@ async function request(method, endpoint, data = null, options = {}) {
     // informational for the caller, not a session-wide auth failure.
     const SOFT_403 = ['notifications/unread-count', 'notifications', 'settings'];
     const isSoft403 = error.status === 403 && SOFT_403.some((p) => endpoint.startsWith('/' + p));
-    if (error.status === 401 && !isSoft403) {
-      handleUnauthorized('Your session has expired. Please log in again.');
-    }
     if (error.status === 403 && !isSoft403) {
       let mustChange = false;
       try {
@@ -153,17 +241,17 @@ function setSubmittingState(state) {
   });
 }
 
-async function mutating(method, endpoint, data) {
+async function mutating(method, endpoint, data, options = {}) {
   setSubmittingState(true);
   try {
-    return await request(method, endpoint, data);
+    return await request(method, endpoint, data, options);
   } finally {
     setSubmittingState(false);
   }
 }
 
-function post(endpoint, data) {
-  return mutating('POST', endpoint, data);
+function post(endpoint, data, options = {}) {
+  return mutating('POST', endpoint, data, options);
 }
 
 function put(endpoint, data) {
@@ -186,4 +274,10 @@ window.API = {
   patch,
   del,
   handleUnauthorized
+};
+window.SubscriptionGate = {
+  recover: recoverSubscriptionAccess,
+  show: showSubscriptionModal,
+  hide: hideSubscriptionModal,
+  get isOpen() { return isSubscriptionModalOpen; },
 };

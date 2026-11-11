@@ -71,7 +71,12 @@ const corsOptions = {
   credentials: true
 };
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '10mb',
+  // Payment callbacks are signed over the exact byte sequence sent by the
+  // provider. Keep a copy before JSON parsing so the webhook can verify it.
+  verify(req, res, buffer) { req.rawBody = Buffer.from(buffer); },
+}));
 app.use(express.urlencoded({ extended: true }));
 
 const { camelToSnake, snakeToCamel } = require('./utils/caseConverter');
@@ -136,11 +141,28 @@ app.get('/ready', (req, res) => {
 // --- Retry worker (background cloud sync retry) ---
 const { startRetryWorker } = require('./services/retry-worker');
 
+// Auth, wallet and signed payment webhook endpoints must remain reachable
+// when an account is blocked. All other API routes are authenticated first,
+// then gated before a feature router can run. Feature routers may authenticate
+// again; that preserves their standalone authorization contract.
+const { authMiddleware } = require('./middleware/auth');
+const { checkSubscriptionStatus, isSubscriptionBypassPath } = require('./middleware/subscription');
+app.use('/api', (req, res, next) => {
+  if (isSubscriptionBypassPath(req.path)) return next();
+  authMiddleware(req, res, (authError) => {
+    if (authError) return next(authError);
+    return checkSubscriptionStatus(req, res, next);
+  });
+});
+
 app.use('/api/auth', authRoutes);
 // Mother Company / Distribution Agency control (Phase 1).
 // Self-guarded: this router applies authMiddleware + requireMotherCompany to
 // every route, so mounting it introduces no unauthenticated surface.
 app.use('/api/mother-company', require('./routes/motherCompany'));
+app.use('/api/wallet', require('./routes/wallet'));
+app.use('/api/subscriptions', require('./routes/subscriptions'));
+app.use('/api/storage', require('./routes/storage'));
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/contacts', contactsRoutes);
 app.use('/api/organizations', organizationsRoutes);
@@ -179,7 +201,7 @@ app.get('/api', (req, res) => {
       version: APP_VERSION,
       endpoints: [
         '/api/auth', '/api/dashboard', '/api/contacts', '/api/organizations',
-        '/api/mother-company',
+        '/api/mother-company', '/api/wallet', '/api/subscriptions', '/api/storage',
         '/api/deals', '/api/pipelines', '/api/products', '/api/invoices',
         '/api/payments', '/api/activities', '/api/tasks', '/api/workflows',
         '/api/reports', '/api/users', '/api/settings', '/api/search', '/api/audit',
@@ -325,6 +347,8 @@ runSafeMigrations({ backup: process.env.MIGRATION_BACKUP !== 'false', recoverSta
   // Start the background retry worker AFTER migrations succeeded and the DB
   // connection is bound (runSafeMigrations completed above).
   startRetryWorker();
+  const { startSubscriptionRenewalWorker } = require('./services/subscriptionRenewalWorker');
+  startSubscriptionRenewalWorker();
   const startServer = () => {
     listenOnce(PORT, HOST)
       .then((srv) => {
