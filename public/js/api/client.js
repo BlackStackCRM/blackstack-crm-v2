@@ -70,13 +70,20 @@ async function request(method, endpoint, data = null, options = {}) {
   }
 
   const config = {
-    method,
-    headers,
     ...options,
+    method,
+    headers: { ...headers, ...(options.headers || {}) },
   };
 
   if (data && method !== 'GET' && method !== 'DELETE') {
     config.body = JSON.stringify(data);
+  }
+
+  // Temporary diagnostic for the customer administrator 404 investigation.
+  // Keep this scoped to the administrator endpoints so other CRM traffic is
+  // not added to the browser console.
+  if (/\/agency-control\/customers\/[^/]+\/administrators(?:\/|$)/i.test(endpoint)) {
+    console.info(`[customer-admin request] ${method} ${url}`);
   }
 
   try {
@@ -149,13 +156,8 @@ async function request(method, endpoint, data = null, options = {}) {
       if (!options.silent && typeof Toast !== 'undefined') Toast.error(authMessage || 'Request was not authorized.');
       throw error;
     }
-    // ENDPOINT-SCOPED SOFT FAILURES: decorative endpoints whose failure must
-    // never log the user out (Topbar notification counters, settings summary).
-    // Hierarchy accounts legitimately lack notifications.view; a 403 here is
-    // informational for the caller, not a session-wide auth failure.
-    const SOFT_403 = ['notifications/unread-count', 'notifications', 'settings'];
-    const isSoft403 = error.status === 403 && SOFT_403.some((p) => endpoint.startsWith('/' + p));
-    if (error.status === 403 && !isSoft403) {
+    // A permission denial does not invalidate a signed-in session.
+    if (error.status === 403) {
       let mustChange = false;
       try {
         mustChange = JSON.parse(localStorage.getItem('crm_user') || '{}').mustChangePassword === true;
@@ -165,50 +167,13 @@ async function request(method, endpoint, data = null, options = {}) {
         window.dispatchEvent(new CustomEvent('page:navigate', { detail: { path: 'change-password' } }));
         throw error; // caller shows its own message; no logout
       }
-      handleForbidden(error);
-    }
-    throw error;
-    // FIX (stale-permission recovery): a 403 after a server-side permission
-    // fix means the browser is holding a stale LocalStorage user object
-    // (permissions built at login, before the fix). Clear the cached profile
-    // and force re-login so the fresh grants take effect — with a message
-    // that explains WHY, instead of a generic failure screen.
-    //
-    // EXCEPT: an account with must_change_password still set legitimately
-    // lacks most permissions until it sets a real password. Forcing logout
-    // here caused the sub-agency login LOOP (login OK → dashboard 403 →
-    // logout → login …). Instead: keep the session, route to the forced
-    // change-password screen, and let the change clear the flag.
-    if (!options.silent && error.status === 403) {
-      let mustChange = false;
-      try {
-        mustChange = JSON.parse(localStorage.getItem('crm_user') || '{}').mustChangePassword === true;
-      } catch { /* malformed cache — treat as normal 403 */ }
-      if (mustChange) {
-        window.location.hash = '#change-password';
-        window.dispatchEvent(new CustomEvent('page:navigate', { detail: { path: 'change-password' } }));
-        throw error; // caller shows its own message; no logout
+      if (!options.silent && typeof Toast !== 'undefined') {
+        Toast.error('You do not have permission to view this resource.');
       }
-      handleForbidden(error);
+      throw error;
     }
     throw error;
   }
-}
-
-function handleForbidden(error) {
-  // Only force a re-login when the 403 is a PERMISSION problem (server says
-  // "Permission denied: …"). Other 403 shapes (e.g. Mother Company guards)
-  // are legitimate access restrictions for this user and must NOT log them
-  // out — they would just bounce back to the same screen.
-  const raw = (error.body && error.body.error && error.body.error.message)
-    || error.message || '';
-  if (!/^permission denied/i.test(raw)) return;
-  localStorage.removeItem('crm_token');
-  localStorage.removeItem('crm_user');
-  document.cookie = 'crm_token=; Path=/; Max-Age=0; SameSite=Lax';
-  const msg = encodeURIComponent(
-    'Session expired or permissions updated. Please log in again.');
-  window.location.href = '/login.html?reason=' + msg;
 }
 
 function handleUnauthorized(customMessage) {

@@ -45,7 +45,7 @@ window.PageModules.leadDetail = {
     try {
       // Load default currency from settings
       try {
-        const settings = await API.get('/settings');
+        const settings = await API.get('/settings', {}, { silent: true });
         this.currentCurrency = settings.defaultCurrency || 'USD';
       } catch { /* use default */ }
       const [leadRes, contactRes] = await Promise.all([

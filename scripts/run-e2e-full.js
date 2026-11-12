@@ -108,6 +108,10 @@ function portInUse(port) {
   }
 
   process.env.DB_PATH = testDb;
+  // The RBAC UI browser spec needs Agency / Sub-agency / Customer fixtures.
+  // Seed them only after the runner has selected its disposable clone; this
+  // never creates accounts in the configured Supabase Auth project.
+  require(path.join(ROOT, 'tests', 'fixtures', 'seed-rbac-ui-users'));
   try {
     const isolation = await assertE2eIsolation({ suite: 'run-e2e-full', requireFreePort: true });
     console.log(`[isolation] verified port ${isolation.port} (non-production, free)`);

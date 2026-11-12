@@ -1,0 +1,2 @@
+-- Extend plan and assigned-subscription snapshots to support calendar units.
+-- The migration runner conditionally adds these columns for SQLite compatibility.

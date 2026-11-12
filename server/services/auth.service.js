@@ -5,6 +5,7 @@ const { UserRepository } = require('../repositories/user.repository');
 const { AuditRepository } = require('../repositories/audit.repository');
 const { generateId } = require('../utils/generateId');
 const { AuthenticationError, ValidationError, NotFoundError } = require('../utils/errors');
+const { resolveHierarchyRole } = require('./rbac.service');
 
 class AuthService {
   constructor(conn) {
@@ -22,6 +23,8 @@ class AuthService {
 
     if (!user) throw new AuthenticationError('Invalid credentials.');
     if (user.status?.toUpperCase() !== 'ACTIVE') throw new AuthenticationError('Invalid credentials.');
+
+    const hierarchyRole = resolveHierarchyRole(this.conn, user);
 
     const isMatch = await PasswordService.verify(password, user.password_hash);
     if (!isMatch) {
@@ -50,20 +53,20 @@ class AuthService {
     // carry hierarchy_role but no role_permissions rows — their permission list
     // would be empty and every scoped endpoint would 403. Every role gets
     // dashboard.view: all three land on #dashboard after login.
-    if (user.hierarchy_role === 'agency') {
+    if (hierarchyRole === 'agency') {
       permissions = Array.from(new Set([...(permissions || []),
         'dashboard.view', 'notifications.view',
         'agency_control.subagencies.view', 'agency_control.subagencies.create',
         'agency_control.agencies.manage', 'agency_control.customers.manage']));
-    } else if (user.hierarchy_role === 'sub_agency') {
+    } else if (hierarchyRole === 'sub_agency') {
       permissions = Array.from(new Set([...(permissions || []),
         'dashboard.view', 'notifications.view',
-        'agency_control.subagencies.view', 'agency_control.customers.manage']));
-    } else if (user.hierarchy_role === 'customer_tenant') {
-      // Read-only on its own data: view permission only, no create/manage.
+        'agency_control.customers.manage']));
+    } else if (hierarchyRole === 'customer_tenant') {
+      // Customer account capabilities come from its assigned business modules;
+      // hierarchy account-management grants are intentionally absent.
       permissions = Array.from(new Set([...(permissions || []),
-        'dashboard.view', 'notifications.view',
-        'agency_control.subagencies.view']));
+        'dashboard.view', 'notifications.view']));
     }
 
     this.userRepo.updateLastLogin(user.id);
@@ -83,6 +86,11 @@ class AuthService {
         sessionId: generateId('sess')
       }
     );
+    const verifiedSession = SessionManager.verifyToken(session.token);
+    if (verifiedSession && verifiedSession.exp) {
+      this.conn.run('INSERT OR REPLACE INTO auth_sessions(session_id,user_id,company_id,issued_at,expires_at,last_seen_at,revoked_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP,NULL)',
+        session.sessionId, user.id, user.company_id, new Date(verifiedSession.iat * 1000).toISOString(), new Date(verifiedSession.exp * 1000).toISOString());
+    }
 
     this.auditRepo.log({
       id: generateId('aud'), company_id: user.company_id, user_id: user.id,
@@ -200,6 +208,7 @@ class AuthService {
 
   logout(token, context) {
     if (context) {
+      this.conn.run('UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE session_id=? AND user_id=?', context.sessionId, context.userId);
       this.auditRepo.log({
         id: generateId('aud'), company_id: context.companyId, user_id: context.userId,
         action: 'USER_LOGOUT', entity_type: 'USER', entity_id: context.userId,
@@ -263,6 +272,7 @@ class AuthService {
     if (!context || !context.userId) throw new AuthenticationError('Authentication required.');
     const user = this.userRepo.findById(context.userId, context.companyId);
     if (!user) throw new NotFoundError('User', context.userId);
+    const hierarchyRole = resolveHierarchyRole(this.conn, user);
     const withRoles = this.userRepo.getUserWithRoles(user.id) || { roles: [], permissions: [] };
     let permissions = withRoles.permissions || [];
     const roles = withRoles.roles || [];
@@ -279,19 +289,18 @@ class AuthService {
     // or /api/auth/profile (and now the login payload, which reuses this
     // builder) would return an empty permission list and the role-scoped UI
     // would never render.
-    if (user.hierarchy_role === 'agency') {
+    if (hierarchyRole === 'agency') {
       permissions = Array.from(new Set([...(permissions || []),
         'dashboard.view', 'notifications.view',
         'agency_control.subagencies.view', 'agency_control.subagencies.create',
         'agency_control.agencies.manage', 'agency_control.customers.manage']));
-    } else if (user.hierarchy_role === 'sub_agency') {
+    } else if (hierarchyRole === 'sub_agency') {
       permissions = Array.from(new Set([...(permissions || []),
         'dashboard.view', 'notifications.view',
-        'agency_control.subagencies.view', 'agency_control.customers.manage']));
-    } else if (user.hierarchy_role === 'customer_tenant') {
+        'agency_control.customers.manage']));
+    } else if (hierarchyRole === 'customer_tenant') {
       permissions = Array.from(new Set([...(permissions || []),
-        'dashboard.view', 'notifications.view',
-        'agency_control.subagencies.view']));
+        'dashboard.view', 'notifications.view']));
     }
     const fullName = user.full_name || '';
     const nameParts = fullName.split(' ');
@@ -301,7 +310,7 @@ class AuthService {
     // (set at account creation, never client-editable); agencyId comes from
     // the agency_administrators link (null for customer_tenant accounts —
     // their tenancy is company_id).
-    const agencyLink = user.hierarchy_role && user.hierarchy_role !== 'customer_tenant'
+    const agencyLink = hierarchyRole !== 'customer_tenant' && hierarchyRole !== 'platform'
       ? this.userRepo.conn.get('SELECT a.id AS agency_id FROM agency_administrators aa JOIN agencies a ON a.id = aa.agency_id WHERE aa.user_id = ? AND aa.status = \'ACTIVE\' LIMIT 1', [user.id])
       : null;
     // FIX (sub_agency agencyId null): legacy sub-agency accounts created before
@@ -313,7 +322,7 @@ class AuthService {
     //   3. the PARENT user's agency link (users.parent_user_id) — the agency
     //      the sub-agency was created under; the correct scoping anchor when
     //      the account has no agency row of its own.
-    if (!agencyLink && user.hierarchy_role && user.hierarchy_role !== 'customer_tenant') {
+    if (!agencyLink && hierarchyRole !== 'customer_tenant' && hierarchyRole !== 'platform') {
       const byCompany = this.userRepo.conn.get('SELECT id AS agency_id FROM agencies WHERE company_id = ? LIMIT 1', [user.company_id]);
       if (byCompany) {
         return this._profilePayload(user, roles, permissions, byCompany.agency_id);
@@ -355,7 +364,7 @@ class AuthService {
       companyId: user.company_id,
       branchId: user.branch_id,
       lastLogin: user.last_login_at,
-      hierarchyRole: user.hierarchy_role || null,
+      hierarchyRole: resolveHierarchyRole(this.conn, user),
       agencyId: agencyId || null,
       mustChangePassword: Boolean(user.must_change_password),
       roles,

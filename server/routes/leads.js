@@ -14,7 +14,7 @@ const handle = (req, res, next) => {
   next();
 };
 
-router.get('/', authMiddleware, requirePermission('contacts.view'), controller.list.bind(controller));
+router.get('/', authMiddleware, requirePermission('leads.view'), controller.list.bind(controller));
 router.get('/:id', authMiddleware, requirePermission('leads.view'), controller.getOne.bind(controller));
 router.post('/', authMiddleware, requirePermission('contacts.create'),
   [body('contact_id').notEmpty(), handle], controller.create.bind(controller));

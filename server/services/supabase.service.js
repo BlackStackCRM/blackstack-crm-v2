@@ -239,13 +239,21 @@ function markRetryFailure(db, agency_id, error_message) {
  *  FIX 2 (audit 2026-11-02): async so the removed-agency branch can await the
  *  Supabase delete; callers that treat this as sync are unaffected (they get a
  *  Promise that resolves to the results array). */
-async function retryPending(db) {
-  const rows = db.all(
-    `SELECT id, agency_id, status, attempts, error_message, updated_at
+async function retryPending(db, options = {}) {
+  const requestedIds = Array.isArray(options.agencyIds)
+    ? [...new Set(options.agencyIds.map((value) => String(value)))].slice(0, 500)
+    : null;
+  let query = `SELECT id, agency_id, status, attempts, error_message, updated_at
      FROM cloud_sync_status
-     WHERE status IN ('PENDING','FAILED')
-     ORDER BY CASE status WHEN 'FAILED' THEN 0 ELSE 1 END, updated_at ASC`,
-  );
+     WHERE status IN ('PENDING','FAILED')`;
+  const params = [];
+  if (requestedIds) {
+    if (!requestedIds.length) return [];
+    query += ` AND agency_id IN (${requestedIds.map(() => '?').join(',')})`;
+    params.push(...requestedIds);
+  }
+  query += ` ORDER BY CASE status WHEN 'FAILED' THEN 0 ELSE 1 END, updated_at ASC`;
+  const rows = db.all(query, params);
   const results = [];
   for (const r of rows) {
     try {

@@ -41,11 +41,30 @@ window.PageModules.settings = {
 
   async renderTab() {
     const body = document.getElementById('settings-body');
+    const isCustomerTenant = window.RolePermissions?.role() === 'customer_tenant';
     if (this.activeTab === 'account') return this.renderAccount(body);
     if (this.activeTab === 'appearance') return this.renderAppearance(body);
+    // These sections are visible to customer tenants for a consistent Settings
+    // menu, but tenant-wide configuration and database safety controls remain
+    // administrator managed. Do not issue their protected API requests.
+    if (isCustomerTenant && this.activeTab === 'system') {
+      return this.renderManagedSection(body, 'System settings', 'System-wide configuration is managed by your administrator.');
+    }
+    if (isCustomerTenant && this.activeTab === 'datasafety') {
+      return this.renderManagedSection(body, 'Data safety', 'Backups, storage, and data recovery are managed by your administrator.');
+    }
     if (this.activeTab === 'system') return this.renderSystem(body);
     if (this.activeTab === 'updates') return this.renderUpdates(body);
     if (this.activeTab === 'datasafety') return this.renderDataSafety(body);
+  },
+
+  renderManagedSection(container, title, message) {
+    container.innerHTML = `
+      <section class="max-w-2xl rounded-lg border border-outline-variant/40 bg-surface-container-low p-container-padding">
+        <h2 class="font-h3 text-h3 text-on-surface">${title}</h2>
+        <p class="mt-2 font-body-md text-on-surface-variant">${message}</p>
+      </section>
+    `;
   },
 
   renderAccount(container) {
@@ -248,6 +267,7 @@ window.PageModules.settings = {
   // ------------------ UPDATES TAB (desktop app only) ------------------
   async renderUpdates(container) {
     const isDesktop = !!(window.desktop && window.desktop.isDesktop);
+    const isCustomerTenant = window.RolePermissions?.role() === 'customer_tenant';
     let info = null;
     try { info = await window.desktop.getAppInfo(); } catch { /* fallback below */ }
 
@@ -260,12 +280,14 @@ window.PageModules.settings = {
         </div>
         <div class="pt-stack-md border-t border-outline-variant/30" id="channel-panel">
           <h3 class="font-h3 text-h3 text-on-surface mb-stack-sm">Update Channel</h3>
-          <div role="radiogroup" aria-label="Update channel" class="flex gap-stack-md mb-stack-md" id="channel-options">
-            <label class="flex items-center gap-2 font-body-md text-on-surface"><input type="radio" name="update-channel" value="stable"> Stable</label>
-            <label class="flex items-center gap-2 font-body-md text-on-surface"><input type="radio" name="update-channel" value="beta"> Beta (early releases)</label>
-            <label class="flex items-center gap-2 font-body-md text-on-surface"><input type="radio" name="update-channel" value="enterprise"> Enterprise (IT-managed)</label>
-          </div>
-          <p class="font-body-sm text-body-sm text-on-surface-variant">Stable is recommended. Beta gives early access to pre-releases. Enterprise follows stable releases for IT-managed deployments.</p>
+          ${isCustomerTenant
+            ? '<p class="font-body-sm text-body-sm text-on-surface-variant">Update channel is managed by your administrator.</p>'
+            : `<div role="radiogroup" aria-label="Update channel" class="flex gap-stack-md mb-stack-md" id="channel-options">
+                <label class="flex items-center gap-2 font-body-md text-on-surface"><input type="radio" name="update-channel" value="stable"> Stable</label>
+                <label class="flex items-center gap-2 font-body-md text-on-surface"><input type="radio" name="update-channel" value="beta"> Beta (early releases)</label>
+                <label class="flex items-center gap-2 font-body-md text-on-surface"><input type="radio" name="update-channel" value="enterprise"> Enterprise (IT-managed)</label>
+              </div>
+              <p class="font-body-sm text-body-sm text-on-surface-variant">Stable is recommended. Beta gives early access to pre-releases. Enterprise follows stable releases for IT-managed deployments.</p>`}
         </div>
         <div class="pt-stack-md border-t border-outline-variant/30" id="update-panel">
           <h3 class="font-h3 text-h3 text-on-surface mb-stack-sm">Updates</h3>
@@ -296,8 +318,9 @@ window.PageModules.settings = {
       statusEl.textContent = 'Updates are managed by the desktop application. You are using the web version.';
     }
 
-    // Channel selector (both desktop and web; persisted server-side).
-    (async () => {
+    // Channel selection is an administrator setting. Customer tenants can see
+    // the Updates section and status, but do not read or change that setting.
+    if (!isCustomerTenant) (async () => {
       try {
         // Routed through the shared API wrapper: every /api/datasafety route
         // requires authMiddleware + requirePermission('settings.manage'), and a

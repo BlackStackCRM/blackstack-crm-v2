@@ -12,6 +12,7 @@ class AuthController {
       const { username, email, identifier, password } = req.body;
       const id = (identifier || email || username || '').toString().trim().toLowerCase();
       const result = await this.service.login(id, password);
+      this.logHierarchyProfileContext('login', result && result.user);
       res.json(successResponse(result));
     } catch (err) {
       next(err);
@@ -62,10 +63,23 @@ class AuthController {
   async getProfile(req, res, next) {
     try {
       const user = await this.service.getProfile(req.user);
+      this.logHierarchyProfileContext('profile', user);
       res.json(successResponse(user));
     } catch (err) {
       next(err);
     }
+  }
+
+  // Opt-in, non-secret diagnostics for agencyId resolution. Do not dump the
+  // full profile: it contains personal fields and must never expose credentials.
+  logHierarchyProfileContext(source, user) {
+    if (process.env.DEBUG_HIERARCHY_PROFILE !== '1' || !user) return;
+    console.info('[auth] hierarchy profile context', {
+      source,
+      userId: user.id || null,
+      hierarchyRole: user.hierarchyRole || null,
+      agencyId: user.agencyId || null,
+    });
   }
 
   async updateProfile(req, res, next) {

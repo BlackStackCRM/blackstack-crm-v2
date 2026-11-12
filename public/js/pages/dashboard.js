@@ -12,7 +12,7 @@ window.PageModules.dashboard = {
 
     // Load default currency from settings
     try {
-      const settings = await API.get('/settings');
+      const settings = await API.get('/settings', {}, { silent: true });
       this.currentCurrency = settings.defaultCurrency || 'USD';
     } catch { /* use default */ }
 
@@ -156,9 +156,9 @@ window.PageModules.dashboard = {
     } catch (err) {
       const status = err && (err.status || err.statusCode);
       const msg = (err && (err.message || err.error)) || 'Unknown error';
-      if (status === 401) {
-        Toast.error('Session expired — redirecting to login');
-        setTimeout(() => { window.location.href = '/login.html'; }, 800);
+      if (status === 401 || status === 429) {
+        // The API client handles invalid bearer tokens and rate-limit notices.
+        // Do not turn transient 429s or non-token 401s into another redirect.
         return;
       }
       ErrorState.render(

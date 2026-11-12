@@ -49,7 +49,9 @@ const _LIVE = new Set();
 // the caller that opens a connection decides the file, which is the only moment
 // "what am I about to touch" is knowable.
 function _resolveDbPath() {
-  return path.resolve(process.env.DB_PATH || DEFAULT_DB_PATH);
+  const configured = process.env.DB_PATH || DEFAULT_DB_PATH;
+  const baseDir = process.env.BLACKSTACK_ENV_DIR || process.cwd();
+  return path.isAbsolute(configured) ? path.normalize(configured) : path.resolve(baseDir, configured);
 }
 
 /** True when no live connection is bound to a different file than `expected`. */
@@ -210,10 +212,22 @@ class DatabaseConnection {
     }
 
     this.db = new ConnectionAdapter(new DatabaseSync(DB_PATH));
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('synchronous = FULL');
-    this.db.pragma('foreign_keys = ON');
-    this.db.pragma('busy_timeout = 5000');
+    try {
+      // Set the busy timeout before WAL so concurrent Electron/web startup can
+      // wait briefly for the other process to finish its current write.
+      this.db.pragma('busy_timeout = 5000');
+      this.db.pragma('journal_mode = WAL');
+      this.db.pragma('synchronous = FULL');
+      this.db.pragma('foreign_keys = ON');
+    } catch (error) {
+      try { this.db.close(); } catch { /* preserve the original connection error */ }
+      this.db = null;
+      const wrapped = new Error(
+        `Cannot prepare shared CRM database at ${DB_PATH}. The file and its folder must be writable for WAL mode. ${error.message}`,
+      );
+      wrapped.cause = error;
+      throw wrapped;
+    }
     // PHASE 3A INCIDENT HARDENING: record this connection so a disposable-DB
     // guard can ask which file is ACTUALLY open. The binding is frozen on the
     // FIRST connect() — see the note above — so a caller that sets

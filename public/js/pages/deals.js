@@ -21,7 +21,9 @@ window.PageModules.deals = {
 
     // Load default currency from settings
     try {
-      const settings = await API.get('/settings');
+      // Currency is optional; customer tenants do not have settings.manage.
+      // Suppress the expected 403 toast and keep the INR fallback.
+      const settings = await API.get('/settings', {}, { silent: true });
       this.currentCurrency = settings.defaultCurrency || 'INR';
     } catch { /* use default */ }
 

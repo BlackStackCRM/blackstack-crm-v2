@@ -11,7 +11,11 @@
     // mother_company.* permission, but the API guards are what actually protect
     // it — reaching this route directly yields an empty shell and 403s.
     'mother-company': { module: 'motherCompany' },
+    'wallet': { module: 'wallet' },
+    'subscriptions': { module: 'subscriptions' },
+    'storage': { module: 'storage' },
     'agency-control': { module: 'agencyControl' },
+    'customer-tenants': { module: 'agencyControl', mode: 'customers-only' },
     // Role-scoped hierarchy management (agency / sub_agency only).
     'hierarchy': { module: 'hierarchy' },
     // Forced password change (must_change_password accounts only — the guard
@@ -91,9 +95,13 @@
     return null;
   }
 
-  function init() {
+  async function init() {
     const pathname = window.location.pathname;
     if (pathname.endsWith('login.html') || pathname === '/login') return;
+    // The sidebar refreshes the authoritative profile before rendering. Wait
+    // for that refresh so a stale cached hierarchyRole cannot briefly open an
+    // Agency Control page with controls from the previous role.
+    if (sidebar && sidebar.ready) await sidebar.ready;
     if (!AuthAPI.isAuthenticated()) {
       window.location.href = '/login.html';
       return;
@@ -152,9 +160,59 @@
       return;
     }
 
+    const rolePermissions = window.RolePermissions;
+    if (rolePermissions) {
+      const path = hash.split('?')[0];
+      const roleProtectedPaths = new Set([
+        'mother-company', 'agency-control', 'customer-tenants', 'hierarchy', 'users', 'settings', 'storage',
+      ]);
+      // Refresh the server role before opening a protected page. The local
+      // profile can outlive an agency reassignment or a role repair.
+      if (roleProtectedPaths.has(path) && window.AuthAPI?.getProfile) {
+        try {
+          const profile = await window.AuthAPI.getProfile();
+          if (profile) {
+            localStorage.setItem('crm_user', JSON.stringify(profile));
+            if (sidebar) sidebar.render();
+          }
+        } catch {
+          main.innerHTML = '<div class="max-w-lg mx-auto mt-12 text-center"><h1 class="font-display text-h2">Could not verify your current role. Please try again.</h1><a class="inline-block mt-4 underline" href="#dashboard">Return to Dashboard</a></div>';
+          if (sidebar) sidebar.setActive('dashboard');
+          return;
+        }
+      }
+      const role = rolePermissions.role();
+      // Agency Control is the single network-management interface for
+      // platform/distribution roles. Sub-agencies use its customer-only view.
+      // Keep the old hash links working by redirecting them to the canonical
+      // menu/page for the signed-in role.
+      if (path === 'hierarchy' || (path === 'agency-control' && role === 'sub_agency')) {
+        const destination = role === 'platform' || role === 'agency'
+          ? 'agency-control'
+          : role === 'sub_agency' ? 'customer-tenants' : 'dashboard';
+        window.location.hash = `#${destination}`;
+        loadPage(destination);
+        return;
+      }
+      const restricted = {
+        'mother-company': rolePermissions.canViewMotherCompany(),
+        subscriptions: rolePermissions.hasRole('platform'),
+        storage: rolePermissions.hasRole('platform'),
+        'agency-control': rolePermissions.canViewAgencyControl(),
+        users: rolePermissions.canViewUsers(),
+        settings: rolePermissions.canViewSettings(),
+        'customer-tenants': rolePermissions.canViewCustomerTenants(),
+      };
+      if (Object.prototype.hasOwnProperty.call(restricted, path) && !restricted[path]) {
+        main.innerHTML = '<div class="max-w-lg mx-auto mt-12 text-center"><h1 class="font-display text-h2">This page is not available for your role.</h1><a class="inline-block mt-4 underline" href="#dashboard">Return to Dashboard</a></div>';
+        if (sidebar) sidebar.setActive('dashboard');
+        return;
+      }
+    }
+
     try {
       const moduleFn = window.PageModules[resolved.module].init.bind(window.PageModules[resolved.module]);
-      let arg = null;
+      let arg = resolved.mode || null;
       if (resolved.module === 'contactDetail' || resolved.module === 'dealDetail' || resolved.module === 'journal' || resolved.module === 'bills') {
         arg = resolved.params && resolved.params.id;
       } else if (resolved.module === 'search') {

@@ -1,0 +1,4 @@
+-- Initial schema for the license server.
+-- Creates the authoritative tables. This file is applied only to the
+-- license server's own database (see src/scripts/keygen.ts and
+-- src/db/migrate.ts); the CRM database is never opened here.

@@ -25,7 +25,7 @@ const { AgencyService } = require('../services/agency.service');
 // router the only endpoint shape in the API, so it uses the shared helpers.
 const { successResponse } = require('../utils/response');
 const { getConn } = require('../utils/db');
-const { ValidationError, AppError } = require('../utils/errors');
+const { ValidationError, AppError, NotFoundError } = require('../utils/errors');
 const { PasswordService } = require('../auth/password');
 
 const router = express.Router();
@@ -395,6 +395,85 @@ router.post('/agencies/:id/administrators',
         console.error('[SYNC] admin sync threw:', e instanceof Error ? e.message : String(e));
       }
       res.status(201).json(successResponse({ administrator }, 201));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+router.post('/agencies/:id/administrators/:adminId/reset-password',
+  requireMotherCompany(P.AGENCIES_ADMINS),
+  async (req, res, next) => {
+    try {
+      const password = String((req.body || {}).password || '');
+      if (password.length < 10) {
+        throw new ValidationError('Password reset failed.', { password: 'Password must be at least 10 characters.' });
+      }
+
+      const service = svc();
+      let agency = null;
+      try {
+        agency = await service.getByIdFromSupabase(req.params.id);
+      } catch (cloudError) {
+        // Local-only agencies are still supported; ownership is enforced below.
+        agency = null;
+      }
+      let localAgencyId = req.params.id;
+      if (agency && agency.agency_code) {
+        const localAgency = service.findByCode(agency.agency_code);
+        if (localAgency) localAgencyId = localAgency.id;
+      }
+      service.getForCompany(localAgencyId, req.user.companyId);
+
+      const admin = service.db.get(
+        `SELECT aa.id AS admin_id, aa.user_id, aa.status AS admin_status,
+                u.status AS user_status, u.supabase_user_id
+         FROM agency_administrators aa
+         JOIN users u ON u.id = aa.user_id
+         WHERE aa.id = ? AND aa.agency_id = ?`,
+        [req.params.adminId, localAgencyId],
+      );
+      if (!admin || admin.admin_status !== 'ACTIVE' || admin.user_status !== 'ACTIVE') {
+        throw new NotFoundError('Active agency administrator', req.params.adminId);
+      }
+
+      const passwordHash = await PasswordService.hash(password);
+      if (admin.supabase_user_id) {
+        const { isConfigured, getSupabaseClient } = require('../config/supabase');
+        if (!isConfigured()) {
+          throw new AppError('Supabase is unavailable for resetting this Auth password.', 'SUPABASE_UNAVAILABLE', 503);
+        }
+        const { error } = await getSupabaseClient().auth.admin.updateUserById(
+          admin.supabase_user_id,
+          { password },
+        );
+        if (error) {
+          throw new AppError('Supabase rejected the administrator password reset.', 'SUPABASE_AUTH_UPDATE_FAILED', 502);
+        }
+        const { error: profileError } = await getSupabaseClient().from('profiles')
+          .update({ must_change_password: true }).eq('user_id', admin.supabase_user_id);
+        if (profileError) {
+          console.warn('[mother-company] password reset succeeded but profile flag sync failed:', profileError.code || 'unknown');
+        }
+      }
+
+      service.db.transaction(() => {
+        service.db.run(
+          'UPDATE users SET password_hash = ?, must_change_password = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [passwordHash, admin.user_id],
+        );
+        service.audit({
+          actorId: req.user.userId,
+          companyId: req.user.companyId,
+          action: 'MOTHER_COMPANY_ADMIN_PASSWORD_RESET',
+          entityType: 'AGENCY_ADMIN',
+          entityId: admin.user_id,
+          oldValues: { agency_id: localAgencyId },
+          newValues: { must_change_password: true },
+          req,
+        });
+      })();
+
+      res.json(successResponse({ administratorId: admin.admin_id, updated: true }));
     } catch (err) {
       next(err);
     }

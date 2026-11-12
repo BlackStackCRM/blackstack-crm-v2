@@ -47,6 +47,7 @@ const RETRY_INTERVAL_MS = resolveRetryInterval(process.env.SYNC_RETRY_INTERVAL_M
 // native overlap; this is an extra safety net if the contract ever becomes async).
 let isRetrying = false;
 let retryTimer = null;
+let workerPaused = false;
 
 // Injected provider so tests can point the worker at a stubbed connection without
 // touching the real server DB. By default it returns the project's real
@@ -64,6 +65,7 @@ function getConnectionAdapter() {
 let inFlightPass = null; // Promise of the currently running pass, if any
 
 function runRetryPass() {
+  if (workerPaused) return Promise.resolve();
   if (isRetrying) {
     return inFlightPass || Promise.resolve();
   }
@@ -159,9 +161,28 @@ function stopRetryWorker() {
   console.log('[retry-worker] Stopped.');
 }
 
+/** Pause retry scheduling and wait for the current pass before a destructive purge. */
+async function pauseRetryWorker() {
+  workerPaused = true;
+  if (retryTimer) {
+    clearInterval(retryTimer);
+    retryTimer = null;
+  }
+  if (inFlightPass) await inFlightPass;
+}
+
+/** Resume periodic retries without triggering an immediate sync pass. */
+function resumeRetryWorker() {
+  if (!workerPaused) return;
+  workerPaused = false;
+  if (!retryTimer) retryTimer = setInterval(() => runRetryPass(), RETRY_INTERVAL_MS);
+}
+
 module.exports = {
   runRetryPass,
   startRetryWorker,
   stopRetryWorker,
+  pauseRetryWorker,
+  resumeRetryWorker,
   RETRY_INTERVAL_MS,
 };

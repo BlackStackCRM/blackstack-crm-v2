@@ -18,7 +18,7 @@ window.PageModules.products = {
     // Load settings + inventory masters in parallel
     try {
       const [settings, cats, uoms, brands, models] = await Promise.allSettled([
-        API.get('/settings'),
+        API.get('/settings', {}, { silent: true }),
         API.get('/inventory/masters/stock_categories', { limit: 200 }),
         API.get('/inventory/masters/units_of_measure', { limit: 200 }),
         API.get('/inventory/masters/brands', { limit: 200 }),

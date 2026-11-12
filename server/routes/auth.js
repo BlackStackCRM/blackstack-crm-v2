@@ -19,6 +19,8 @@ const handleValidation = (req, res, next) => {
 router.post('/login', loginValidation, handleValidation, controller.login.bind(controller));
 router.post('/logout', authMiddleware, controller.logout.bind(controller));
 router.get('/profile', authMiddleware, controller.getProfile.bind(controller));
+// Compatibility alias for clients that refer to the current identity as /me.
+router.get('/me', authMiddleware, controller.getProfile.bind(controller));
 router.put('/profile', authMiddleware, controller.updateProfile.bind(controller));
 router.put('/profile/password', authMiddleware, changePasswordValidation, handleValidation, controller.changePassword.bind(controller));
 

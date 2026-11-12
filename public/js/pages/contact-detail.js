@@ -13,7 +13,7 @@ window.PageModules.contactDetail = {
     if (!id) { window.location.hash = 'contacts'; return () => {}; }
     // Load default currency from settings
     try {
-      const settings = await API.get('/settings');
+        const settings = await API.get('/settings', {}, { silent: true });
       this.currentCurrency = settings.defaultCurrency || 'INR';
     } catch { /* use default */ }
     this.currentId = id;

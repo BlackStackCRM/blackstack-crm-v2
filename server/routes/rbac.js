@@ -96,16 +96,25 @@ router.post('/accounts/create',
         } catch (e) { console.error('[rbac] parent cloud resolve failed:', e.message); }
       }
       const parentAgencyRow = localDb.get('SELECT company_id FROM agencies WHERE id = ?', [parentAgencyResolved]);
-      const tenantCompanyId = (parentAgencyRow && parentAgencyRow.company_id) || caller.localCompanyId;
-      localDb.run(
-        `INSERT INTO users (id, company_id, username, email, password_hash, full_name, role, status,
-                            hierarchy_role, parent_user_id, must_change_password, supabase_user_id)
-         VALUES (?,?,?,?,?,?,?,?,?,?,1,?)`,
-        [userId, tenantCompanyId, account.username, account.email,
-         hash, displayName,
-         targetRole === 'agency' ? 'AGENCY' : (targetRole === 'sub_agency' ? 'AGENCY_ADMIN' : 'USER'),
-         'ACTIVE', targetRole, caller.localUserId, account.supabaseUserId],
-      );
+      const parentCompanyId = (parentAgencyRow && parentAgencyRow.company_id) || caller.localCompanyId;
+      // A customer tenant must own a separate company row. Reusing the
+      // parent's company_id would expose the agency's CRM data and make the
+      // customer mapping point back at the agency itself.
+      const tenantCompanyId = targetRole === 'customer_tenant' ? generateId('cmp') : parentCompanyId;
+      localDb.transaction(() => {
+        if (targetRole === 'customer_tenant') {
+          localDb.run('INSERT INTO companies (id, name, status) VALUES (?,?,?)', [tenantCompanyId, displayName, 'ACTIVE']);
+        }
+        localDb.run(
+          `INSERT INTO users (id, company_id, username, email, password_hash, full_name, role, status,
+                              hierarchy_role, parent_user_id, must_change_password, supabase_user_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?,1,?)`,
+          [userId, tenantCompanyId, account.username, account.email,
+           hash, displayName,
+           targetRole === 'agency' ? 'AGENCY' : (targetRole === 'sub_agency' ? 'AGENCY_ADMIN' : 'USER'),
+           'ACTIVE', targetRole, caller.localUserId, account.supabaseUserId],
+        );
+      })();
       // FIX (acceptance gap): an 'agency'/'sub_agency' account MUST own an
       // agency row — the users row alone leaves resolveCaller() with nothing
       // to join (link → missing agency → empty visibility list). Create the
@@ -137,6 +146,15 @@ router.post('/accounts/create',
               [agencyRowId, parentAgencyResolved, caller.localUserId],
             );
           }
+          // Keep the account-to-agency association atomic with creation of the
+          // agency row. Auth/profile and resolveCaller derive agencyId from
+          // this canonical link; users intentionally has no duplicate
+          // agency_id column.
+          localDb.run(
+            `INSERT INTO agency_administrators (id, agency_id, user_id, company_id, role_code, assigned_by, assigned_at, status)
+             VALUES (?,?,?,?,?,?,CURRENT_TIMESTAMP,'ACTIVE')`,
+            [generateId('aad'), agencyRowId, userId, tenantCompanyId, 'AGENCY_ADMIN', caller.localUserId],
+          );
         })();
         // cloud mirror (best-effort) — same pattern as createSubAgency P0/P1
         (async () => {
@@ -152,15 +170,16 @@ router.post('/accounts/create',
           } catch (e) { console.error('[rbac] agency cloud mirror failed:', e.message); }
         })();
       }
-  // Link the new user to its agency row. For agency-level accounts the link
-  // points at the account's OWN agency row (created above), so
-  // resolveCaller()/scopedAgencyIds resolve the correct tenant.
+      // Fail the request rather than return a sub-agency account that cannot
+      // resolve its own agency from /auth/profile or /auth/me.
       if (targetRole !== 'customer_tenant') {
-        localDb.run(
-          `INSERT INTO agency_administrators (id, agency_id, user_id, company_id, role_code, assigned_by, assigned_at, status)
-           VALUES (?,?,?,?,?,?,CURRENT_TIMESTAMP,'ACTIVE')`,
-          [generateId('aad'), agencyRowId, userId, tenantCompanyId, 'AGENCY_ADMIN', caller.localUserId],
+        const ownerLink = localDb.get(
+          `SELECT agency_id FROM agency_administrators
+           WHERE user_id=? AND status='ACTIVE' ORDER BY assigned_at DESC LIMIT 1`,
+          [userId],
         );
+        if (!ownerLink) throw new Error('Could not persist the new account agency association.');
+        agencyRowId = ownerLink.agency_id;
       } else {
         // FIX (customer tenant list empty): a customer_tenant account has no
         // agency row / admin link — its tenancy is the customer_tenant_agencies
@@ -175,7 +194,7 @@ router.post('/accounts/create',
             localDb.run(
               `INSERT OR IGNORE INTO customer_tenant_agencies (company_id, agency_id, provider_company_id, assigned_by)
                VALUES (?,?,?,?)`,
-              [tenantCompanyId, parentAgencyResolved, (parentAgencyRow && parentAgencyRow.company_id) || caller.localCompanyId, caller.localUserId],
+              [tenantCompanyId, parentAgencyResolved, parentCompanyId, caller.localUserId],
             );
             localDb.run(
               `INSERT INTO customer_tenant_agency_history (id, company_id, old_agency_id, new_agency_id, changed_by)
@@ -194,7 +213,7 @@ router.post('/accounts/create',
               const custName = db().get('SELECT name FROM companies WHERE id = ?', [tenantCompanyId]);
               await sb.from('companies').upsert([{ id: tenantCompanyId, name: (custName && custName.name) || displayName, status: 'ACTIVE' }], { onConflict: 'id' });
               const { error: mapErr } = await sb.from('customer_tenant_agencies').upsert(
-                [{ company_id: tenantCompanyId, agency_id: cloudAgency, provider_company_id: (parentAgencyRow && parentAgencyRow.company_id) || caller.localCompanyId, assigned_by: caller.localUserId }],
+                [{ company_id: tenantCompanyId, agency_id: cloudAgency, provider_company_id: parentCompanyId, assigned_by: caller.localUserId }],
                 { onConflict: 'company_id' },
               );
               if (mapErr) console.error('[rbac] customer mapping cloud sync failed:', mapErr.message || JSON.stringify(mapErr));

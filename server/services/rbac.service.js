@@ -22,7 +22,7 @@
 
 const { randomBytes } = require('crypto');
 const { getSupabaseClient } = require('../config/supabase');
-const { NotFoundError, ValidationError, AuthorizationError } = require('../utils/errors');
+const { AppError, NotFoundError, ValidationError, AuthorizationError } = require('../utils/errors');
 
 const ROLES = ['agency', 'sub_agency', 'customer_tenant'];
 
@@ -36,6 +36,44 @@ const CREATION_MATRIX = {
   sub_agency: ['customer_tenant'],
   customer_tenant: [],
 };
+
+/** Resolve the account's effective level from its role and active agency link.
+ * Agency placement is a safety backstop: stale metadata saying `agency` must
+ * not elevate an administrator whose assigned agency is itself a sub-agency. */
+function resolveHierarchyRole(db, user) {
+  if (!user) return null;
+  const get = (sql, params) => {
+    if (typeof db.get === 'function') return db.get(sql, params);
+    return db.prepare(sql).get(...(Array.isArray(params) ? params : [params]));
+  };
+  if (user.role === 'ADMIN' || user.hierarchy_role === 'platform') return 'platform';
+  if (user.hierarchy_role === 'customer_tenant' || user.role === 'CUSTOMER_ADMIN' || user.role === 'customer_tenant') {
+    return 'customer_tenant';
+  }
+
+  const assignment = get(
+    `SELECT a.agency_code,
+            EXISTS(SELECT 1 FROM agency_parent_relationships rel WHERE rel.child_agency_id=a.id) AS has_parent
+     FROM agency_administrators aa JOIN agencies a ON a.id=aa.agency_id
+     WHERE aa.user_id=? AND aa.status='ACTIVE' LIMIT 1`,
+    [user.id],
+  );
+  const linkedToSubAgency = !!assignment && (
+    String(assignment.agency_code || '').toUpperCase().startsWith('SUB-')
+    || Number(assignment.has_parent || 0) === 1
+  );
+  if (linkedToSubAgency || user.hierarchy_role === 'sub_agency' || user.role === 'sub_agency') {
+    return 'sub_agency';
+  }
+  // A root distribution agency's active administrator is an agency caller
+  // even when a legacy account has no hierarchy_role value. Without this
+  // inference, assigned agency admins fall through to customer_tenant and
+  // cannot create sub-agencies or customers under their own agency.
+  if (assignment) return 'agency';
+  if (user.role === 'AGENCY_ADMIN') return 'sub_agency';
+  if (user.hierarchy_role === 'agency' || user.role === 'agency') return 'agency';
+  return 'customer_tenant';
+}
 
 /**
  * The caller's subtree as LOCAL agency ids (mirrors scopedAgencyIds but is
@@ -101,22 +139,9 @@ function resolveCaller(db, session) {
   // acts as the Level-1 creator (creates root distribution agencies and
   // everything beneath them). Its visible scope is all agencies via the
   // scopedAgencyIds admin fallback.
-  // FIX (RBAC, acceptance): HIERARCHY_ROLE IS THE AUTHORITY for accounts
-  // created through /accounts/create (it is set server-side at creation and
-  // never client-editable). Legacy accounts (hierarchy_role NULL) fall back
-  // to normalizing the legacy users.role strings.
-  let role;
-  if (user.hierarchy_role && ROLES.includes(user.hierarchy_role)) {
-    role = user.hierarchy_role;
-  } else if (user.role === 'ADMIN') {
-    role = 'platform';
-  } else if (user.role === 'agency') {
-    role = 'agency';
-  } else if (user.role === 'AGENCY_ADMIN' || user.role === 'sub_agency') {
-    role = 'sub_agency';
-  } else {
-    role = 'customer_tenant';
-  }
+  // Role metadata may be stale on legacy/reassigned accounts. The active
+  // agency link and its hierarchy prevent a sub-agency admin being elevated.
+  const role = resolveHierarchyRole(db, user);
   // agency_id: resolved from the administrators link. FIX (resilience):
   // legacy/bug-era accounts may be missing the link row — fall back to the
   // users.company_id reverse lookup (an agency row whose company_id matches
@@ -226,6 +251,12 @@ function assertCanCreate(db, caller, { role: targetRole, parentAgencyId }) {
     return db.prepare(sql).all(...(Array.isArray(params) ? params : [params]));
   };
   if (!caller) throw new AuthorizationError('Authentication required.');
+  if (caller.role === 'sub_agency' && targetRole === 'sub_agency') {
+    throw new AuthorizationError('Sub-agencies do not have permission to create other sub-agencies.');
+  }
+  if (caller.role === 'customer_tenant') {
+    throw new AuthorizationError('Customer tenants do not have permission to create accounts.');
+  }
   if (!CREATION_MATRIX[caller.role] || !CREATION_MATRIX[caller.role].includes(targetRole)) {
     throw new AuthorizationError(`Role "${caller.role}" cannot create "${targetRole}" accounts.`);
   }
@@ -236,6 +267,11 @@ function assertCanCreate(db, caller, { role: targetRole, parentAgencyId }) {
   if (caller.role === 'platform') return;
   if (!caller.localAgencyId) {
     throw new AuthorizationError('Your account is not linked to an agency.');
+  }
+  if (['agency', 'sub_agency'].includes(caller.role)
+      && ['sub_agency', 'customer_tenant'].includes(targetRole)
+      && parentAgencyId !== caller.localAgencyId) {
+    throw new AuthorizationError('Accounts created by your role must be placed directly under your own agency.');
   }
   const visible = getVisibleAgencyIds(db, caller.localAgencyId, caller.role);
   if (!visible.includes(parentAgencyId)) {
@@ -250,6 +286,9 @@ function assertCanCreate(db, caller, { role: targetRole, parentAgencyId }) {
  * username/password/targetRole — role and parent are re-validated server-side.
  */
 async function createChildAccount(db, caller, { username, email: emailOverride, password, targetRole, parentAgencyId, displayName }) {
+  if (caller && caller.role === 'sub_agency' && targetRole === 'sub_agency') {
+    throw new AuthorizationError('Sub-agencies do not have permission to create other sub-agencies.');
+  }
   // SAFE FALLBACK (legacy sub-agency accounts): when the CALLER is an agency /
   // sub-agency and the frontend could not supply parentAgencyId (no agency row
   // of its own → no agencyId in the profile), default the parent to the
@@ -297,6 +336,27 @@ async function createChildAccount(db, caller, { username, email: emailOverride, 
     throw new ValidationError('Account creation failed.', { password: 'Password must be at least 10 characters.' });
   }
 
+  // Check the local identity store before calling Supabase. This avoids a
+  // provider-specific 400 after the UI has already submitted and catches the
+  // common partial-create case where the local account exists but hierarchy
+  // setup was interrupted. Existing identities are never silently reused or
+  // have their passwords overwritten by this endpoint.
+  const get = (sql, params) => {
+    if (typeof db.get === 'function') return db.get(sql, params);
+    return db.prepare(sql).get(...(Array.isArray(params) ? params : [params]));
+  };
+  const existingLocal = get(
+    'SELECT id FROM users WHERE lower(email)=lower(?) OR lower(username)=lower(?) LIMIT 1',
+    [mail, username],
+  );
+  if (existingLocal) {
+    throw new AppError(
+      'This email is already in use. Choose a different email address.',
+      'ACCOUNT_ALREADY_EXISTS',
+      409,
+    );
+  }
+
   const supabase = getSupabaseClient();
   // Auth email: the child's real email when provided, else the deterministic
   // synthesized address for legacy usernames.
@@ -313,15 +373,23 @@ async function createChildAccount(db, caller, { username, email: emailOverride, 
       parent_user_id: caller.supabaseUserId || null,
     },
   });
-  if (authErr) throw new ValidationError('Account creation failed.', { username: authErr.message });
+  if (authErr) {
+    const duplicate = authErr.code === 'email_exists'
+      || authErr.code === 'user_already_exists'
+      || /already (?:been )?registered|already exists|duplicate/i.test(authErr.message || '');
+    if (duplicate) {
+      throw new AppError(
+        'This email is already in use. Choose a different email address.',
+        'ACCOUNT_ALREADY_EXISTS',
+        409,
+      );
+    }
+    throw new ValidationError('Account creation failed.', { username: authErr.message });
+  }
 
   // 2. Resolve the parent's CLOUD uuid and patch app_metadata.agency_id to it
   //    (the hierarchy keys on cloud UUIDs).
   // normalize: adapter or raw handle
-  const get = (sql, params) => {
-    if (typeof db.get === 'function') return db.get(sql, params);
-    return db.prepare(sql).get(...(Array.isArray(params) ? params : [params]));
-  };
   const parentRow = get('SELECT id FROM agencies WHERE id = ?', [parentAgencyId]);
   const cloudParent = parentRow && /^\S+-\S+-\S+-\S+-\S+$/.test(parentRow.id)
     ? parentRow.id
@@ -362,6 +430,7 @@ async function createChildAccount(db, caller, { username, email: emailOverride, 
 module.exports = {
   ROLES,
   CREATION_MATRIX,
+  resolveHierarchyRole,
   getVisibleAgencyIds,
   resolveCaller,
   generatePassword,

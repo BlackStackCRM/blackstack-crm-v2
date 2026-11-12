@@ -3,10 +3,8 @@
  *
  * Responsibilities:
  *  - Enforce single instance
- *  - Point the Phase 1 user-data layer at app.getPath('userData') BEFORE
- *    anything else loads (so DB, backups, locks all live in persistent storage)
- *  - Migrate an existing portable database into userData (once, with a
- *    verified backup — never deletes the source)
+ *  - Keep app support files in app.getPath('userData')
+ *  - Load the same external .env as the web server and use its shared DB_PATH
  *  - Start the existing Express CRM server in-process
  *  - Show the window as soon as the local server responds
  *  - Auto-update via electron-updater (GitHub releases), background check,
@@ -55,6 +53,42 @@ function bootstrap() {
   global.__crmLog = log;
   log('userData dir: ' + userDataDir + (override && userDataDir === path.resolve(override) ? ' (BLACKSTACK_USER_DATA_DIR override)' : ' (default)'));
 
+  // Both the web server and Electron must load the same external environment
+  // file. In packaged installs, the prior safe-migration marker identifies the
+  // source project; shared-env-path.txt or BLACKSTACK_ENV_PATH can override it.
+  let sharedRuntime;
+  try {
+    const runtimeEnvironment = require(path.join(__dirname, '../server/config/runtimeEnvironment'));
+    const envPath = runtimeEnvironment.resolveSharedEnvPath({
+      explicitPath: process.env.BLACKSTACK_ENV_PATH,
+      userDataDir,
+      appPath: app.getAppPath(),
+    });
+    sharedRuntime = runtimeEnvironment.loadRuntimeEnvironment({ envPath, required: true });
+    if (!sharedRuntime.dbPath) {
+      process.env.DB_PATH = path.resolve(sharedRuntime.envDir, 'data/blackstack-crm.db');
+      sharedRuntime.dbPath = process.env.DB_PATH;
+    }
+    log('Shared environment file: ' + sharedRuntime.envPath);
+    log('Shared SQLite database: ' + sharedRuntime.dbPath);
+    const { isConfigured } = require(path.join(__dirname, '../server/config/supabase'));
+    log('Shared Supabase configuration: ' + (isConfigured() ? 'configured' : 'missing required variables'));
+    const legacyDb = path.join(userDataDir, 'database', 'blackstack-crm.db');
+    if (fs.existsSync(legacyDb) && path.resolve(legacyDb) !== path.resolve(sharedRuntime.dbPath)) {
+      log('Legacy isolated Electron database preserved and unused: ' + legacyDb);
+    }
+  } catch (error) {
+    log('FATAL: shared environment/database setup failed: ' + error.message);
+    dialog.showErrorBox(
+      'BlackStack CRM configuration required',
+      'BlackStack could not load the shared environment and database configuration.\n\n'
+        + 'Set BLACKSTACK_ENV_PATH to the web server .env file, or create shared-env-path.txt in the Electron user-data folder containing that path.\n\n'
+        + 'The shared database folder must be writable. No fallback database was opened.\n\nDetails: ' + error.message,
+    );
+    app.exit(1);
+    return;
+  }
+
   const { APP_VERSION } = require(path.join(__dirname, '../server/version'));
   const { updateLogger } = require('./update-logger');
   updateLogger.init(path.join(userDataDir, 'logs'));
@@ -65,30 +99,6 @@ function bootstrap() {
     const { maintain } = require(path.join(__dirname, '../server/services/logManager'));
     maintain(path.join(userDataDir, 'logs'));
   } catch { /* never block startup */ }
-
-  // ── Database migration into userData (one-time, idempotent, safe) ─────────
-  const { migratePortableDatabase } = require('./db-migration');
-  const DB_PATH = path.join(userDataDir, 'database', 'blackstack-crm.db');
-  process.env.DB_PATH = DB_PATH;
-  try {
-    const result = migratePortableDatabase({ targetPath: DB_PATH, log });
-    if (result.status === 'migrated') log(`Portable database migrated to userData (backup: ${result.backupFile})`);
-    else if (result.status === 'existing') log('Existing userData database found — using it.');
-    else if (result.status === 'fresh') log('No existing database — a fresh one will be created by migrations.');
-    else if (result.status === 'error') {
-      log(`FATAL: database migration failed: ${result.error}`);
-      try { require('./eventLog').logEvent('ERROR', 'Database migration failure on startup. Data preserved.', 1002); } catch { /* non-fatal */ }
-      dialog.showErrorBox('BlackStack CRM', 'The database could not be safely prepared.\n\n' +
-        'Your data has NOT been changed. Please restore a backup or contact support.\n\nDetails: ' + result.error);
-      app.exit(1);
-      return;
-    }
-  } catch (err) {
-    log('FATAL: db migration threw: ' + err.message);
-    dialog.showErrorBox('BlackStack CRM', 'Startup aborted to protect your data.\n\n' + err.message);
-    app.exit(1);
-    return;
-  }
 
   // ── Start the CRM server (existing Express app) ───────────────────────────
   // Desktop default port; server-host performs availability check + documented
@@ -586,6 +596,13 @@ function setupAutoUpdate() {
     await createWindow();
     setupAutoUpdate();
     log('App ready');
+  }).catch((error) => {
+    log('FATAL: CRM startup failed: ' + error.message);
+    const message = /readonly|read-only|permission denied|access is denied|unable to open database|writable/i.test(error.message)
+      ? 'BlackStack could not open the shared SQLite database for writing. Check that the database file and its folder are writable and not blocked by another process. No separate fallback database was opened.'
+      : 'BlackStack could not start. Your shared database has not been intentionally replaced. Check the application log for details.';
+    dialog.showErrorBox('BlackStack CRM could not start', message + '\n\nDetails: ' + error.message);
+    app.quit();
   });
 
   app.on('window-all-closed', () => {

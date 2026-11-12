@@ -37,8 +37,8 @@ function makeAgencyAdmin(name, email) {
      VALUES (?,?,?,?,?,?,1)`,
     [agencyId, companyId, 'default', `AGY-${name.toUpperCase()}`, `${name} Agency`, 'ACTIVE'],
   );
-  db.run('INSERT OR IGNORE INTO users (id, company_id, username, email, full_name, role, status) VALUES (?,?,?,?,?,?,?)',
-    [userId, companyId, name.toLowerCase(), email, name, 'USER', 'ACTIVE']);
+  db.run('INSERT OR IGNORE INTO users (id, company_id, username, email, full_name, role, status, hierarchy_role) VALUES (?,?,?,?,?,?,?,?)',
+    [userId, companyId, name.toLowerCase(), email, name, 'USER', 'ACTIVE', 'agency']);
   db.run('INSERT OR IGNORE INTO agency_administrators (id, agency_id, user_id, company_id, role_code, status) VALUES (?,?,?,?,?,?)',
     [`aad_${name.toLowerCase()}`, agencyId, userId, companyId, 'AGENCY_ADMIN', 'ACTIVE']);
   return userId;
@@ -125,4 +125,16 @@ it('reassign + access: in-scope move ok, out-of-scope 404, toggle persists, inva
   try { await svc.changeCustomerAccess(adminB, customerId, { status: 'ACTIVE' }); throw new Error('should fail'); }
   catch (e) { expect(e.code).toBe('NOT_FOUND'); expect(e.status).toBe(404); }
 });
+
+it('hierarchy details and administrator listings enforce agency scope; customer removal retains CRM company data', async () => {
+  await expect(svc.getSubAgency(adminB, subId)).rejects.toMatchObject({ code: 'NOT_FOUND', status: 404 });
+  await expect(svc.listSubAgencyAdministrators(adminB, subId)).rejects.toMatchObject({ code: 'NOT_FOUND', status: 404 });
+  await expect(svc.listCustomerAdministrators(adminB, customerId)).rejects.toMatchObject({ code: 'NOT_FOUND', status: 404 });
+
+  const removed = await svc.removeHierarchyEntity(adminA, 'customer_tenant', customerId);
+  expect(removed).toMatchObject({ id: customerId, deleted: true });
+  expect(db.get('SELECT id FROM companies WHERE id=?', [customerId])).toBeTruthy();
+  expect(db.get('SELECT company_id FROM customer_tenant_agencies WHERE company_id=?', [customerId])).toBeUndefined();
+});
+
 });

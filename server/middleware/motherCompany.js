@@ -32,6 +32,13 @@
  */
 
 const { AuthenticationError, AuthorizationError } = require('../utils/errors');
+const { getConn } = require('../utils/db');
+const { resolveCaller } = require('../services/rbac.service');
+
+function isPlatformAccount(req) {
+  const caller = req.user && resolveCaller(getConn(), { userId: req.user.userId });
+  return !!caller && caller.role === 'platform';
+}
 
 /** Explicit Mother Company permission codes this module accepts. */
 const MOTHER_COMPANY_PERMISSIONS = Object.freeze({
@@ -42,6 +49,9 @@ const MOTHER_COMPANY_PERMISSIONS = Object.freeze({
   AGENCIES_STATUS: 'mother_company.agencies.status',
   AGENCIES_ADMINS: 'mother_company.agencies.admins.manage',
   AUDIT_VIEW: 'mother_company.audit.view',
+  WALLETS_VIEW: 'mother_company.wallets.view',
+  WALLETS_CREDIT: 'mother_company.wallets.credit',
+  SUBSCRIPTIONS_MANAGE: 'mother_company.subscriptions.manage',
 });
 
 const ALL_MOTHER_COMPANY_PERMISSIONS = Object.freeze(
@@ -82,7 +92,7 @@ function requireMotherCompany(permissionCode) {
     if (!req.user) {
       throw new AuthenticationError('Authentication required');
     }
-    if (!hasMotherCompanyPermission(req.user, permissionCode)) {
+    if (!isPlatformAccount(req) || !hasMotherCompanyPermission(req.user, permissionCode)) {
       // Deliberately does not echo the permission code back to the client: the
       // error should not become an oracle for which internal codes exist.
       throw new AuthorizationError('Mother Company access required');
@@ -100,7 +110,7 @@ function requireAnyMotherCompanyPermission() {
     if (!req.user) {
       throw new AuthenticationError('Authentication required');
     }
-    if (!isMotherCompanyUser(req.user)) {
+    if (!isPlatformAccount(req) || !isMotherCompanyUser(req.user)) {
       throw new AuthorizationError('Mother Company access required');
     }
     next();

@@ -1,13 +1,23 @@
 const { getConn } = require('../utils/db');
 const { generateId } = require('../utils/generateId');
 const { PasswordService } = require('../auth/password');
-const { NotFoundError, ValidationError } = require('../utils/errors');
+const { NotFoundError, ValidationError, AuthorizationError } = require('../utils/errors');
 const { successResponse, paginatedResponse } = require('../utils/response');
 const { getPagination } = require('../utils/helpers');
 
 class UsersController {
   constructor() {
     this.conn = getConn();
+  }
+
+  isPlatformAdmin(userId) {
+    return Boolean(this.conn.get(
+      `SELECT 1 AS is_admin FROM users u
+       LEFT JOIN user_roles ur ON ur.user_id = u.id
+       WHERE u.id = ? AND (upper(u.role) = 'ADMIN' OR ur.role_id = 'role_admin')
+       LIMIT 1`,
+      [userId],
+    ));
   }
 
   async list(req, res, next) {
@@ -68,6 +78,10 @@ class UsersController {
     try {
       const existing = this.conn.get('SELECT id FROM users WHERE id = ? AND company_id = ?', [req.params.id, req.user.companyId]);
       if (!existing) throw new NotFoundError('User', req.params.id);
+      if (req.body.status && String(req.body.status).toUpperCase() !== 'ACTIVE'
+        && this.isPlatformAdmin(req.params.id)) {
+        throw new AuthorizationError('Platform administrator accounts cannot be deactivated through User Management.');
+      }
 
       const allowed = ['full_name', 'role', 'status', 'email'];
       const sets = [];
@@ -93,6 +107,9 @@ class UsersController {
     try {
       const existing = this.conn.get('SELECT id FROM users WHERE id = ? AND company_id = ?', [req.params.id, req.user.companyId]);
       if (!existing) throw new NotFoundError('User', req.params.id);
+      if (this.isPlatformAdmin(req.params.id)) {
+        throw new AuthorizationError('Platform administrator accounts cannot be deactivated through User Management.');
+      }
       const now = new Date().toISOString();
       this.conn.run(`UPDATE users SET status = ?, updated_at = ? WHERE id = ? AND company_id = ?`, ['INACTIVE', now, req.params.id, req.user.companyId]);
       res.json(successResponse({ id: req.params.id, deactivated: true }));

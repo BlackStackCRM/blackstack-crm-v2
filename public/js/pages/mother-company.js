@@ -111,6 +111,11 @@ window.PageModules.motherCompany = {
 
       <div id="mc-error" class="hidden mb-stack-md rounded-lg border border-error/40 bg-error/10 px-4 py-3 text-body-sm text-error"></div>
 
+      <div class="flex flex-wrap gap-3 mb-stack-lg">
+        <a href="#wallet" class="rounded-lg border border-outline-variant px-4 py-2 hover:bg-surface-container">Wallet management</a>
+        <a href="#subscriptions" class="rounded-lg border border-outline-variant px-4 py-2 hover:bg-surface-container">Subscription management</a>
+      </div>
+
       <div id="mc-bulk-bar" class="hidden mb-stack-md rounded-xl border border-outline-variant/60 bg-surface-container p-stack-sm">
         <div class="flex flex-wrap items-center gap-stack-sm">
           <span class="font-body-sm text-body-sm text-on-surface-variant">Selected <span id="mc-bulk-count">0</span></span>
@@ -597,16 +602,17 @@ window.PageModules.motherCompany = {
     });
   },
 
-  openResetPasswordModal(agencyId) {
+  async openResetPasswordModal(agencyId) {
     const host = document.getElementById('mc-modal');
     if (!host) return;
     host.innerHTML = `
       <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
         <div class="w-full max-w-lg rounded-xl bg-surface-container p-6 border border-outline-variant/40">
-          <h2 class="font-display text-h3 text-on-surface">Reset administrator password</h2>
-          <p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Set a new temporary password for the agency administrator.</p>
+          <h2 class="font-display text-h3 text-on-surface">Reset user password</h2>
+          <p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Choose an active agency administrator and set a temporary password. They will be asked to change it at next login.</p>
           <div id="mc-reset-error" class="hidden mt-3 text-body-sm text-error"></div>
           <div class="grid grid-cols-1 gap-3 mt-4">
+            <div><label for="mc-r-admin" class="block text-label-md text-on-surface-variant mb-1">User account</label><select id="mc-r-admin" class="w-full rounded-lg border border-outline-variant/50 bg-surface-container-low px-3 py-2 text-body-md"><option value="">Loading active users…</option></select></div>
             ${this.field('mc-r-pass', 'New temporary password', 'Min 10 characters', true)}
           </div>
           <div class="flex justify-end gap-2 mt-6">
@@ -617,20 +623,33 @@ window.PageModules.motherCompany = {
       </div>`;
     const close = () => { host.innerHTML = ''; };
     document.getElementById('mc-r-cancel').addEventListener('click', close);
+    const errEl = document.getElementById('mc-reset-error');
+    const adminSelect = document.getElementById('mc-r-admin');
+    try {
+      const adminsRes = await window.API.get(`/mother-company/agencies/${encodeURIComponent(agencyId)}/administrators`);
+      const activeAdmins = ((adminsRes && adminsRes.administrators) || []).filter((admin) =>
+        String(admin.status || '').toUpperCase() === 'ACTIVE'
+        && String(admin.userStatus || 'ACTIVE').toUpperCase() === 'ACTIVE');
+      adminSelect.innerHTML = activeAdmins.length
+        ? `<option value="">Select a user</option>${activeAdmins.map((admin) => `<option value="${this.esc(admin.id)}">${this.esc(admin.fullName || admin.email || admin.username || 'Administrator')}${admin.email ? ` — ${this.esc(admin.email)}` : ''}</option>`).join('')}`
+        : '<option value="">No active users available</option>';
+    } catch (error) {
+      adminSelect.innerHTML = '<option value="">Could not load users</option>';
+      errEl.textContent = this.describe(error);
+      errEl.classList.remove('hidden');
+    }
     document.getElementById('mc-r-save').addEventListener('click', async () => {
-      const errEl = document.getElementById('mc-reset-error');
       const password = (document.getElementById('mc-r-pass') || {}).value || '';
+      const adminId = adminSelect.value;
+      if (!adminId) {
+        errEl.textContent = 'Select an active user account.';
+        errEl.classList.remove('hidden');
+        return;
+      }
       try {
-        // The agency_administrators row stores the password hash against the
-        // linked user; the mother-company service exposes admin updates via
-        // the administrators PATCH endpoint. Find the ACTIVE admin first.
-        const adminsRes = await window.API.get(`/mother-company/agencies/${encodeURIComponent(agencyId)}/administrators`);
-        const admins = (adminsRes && adminsRes.administrators) || [];
-        const active = admins.find((x) => x.status === 'ACTIVE') || admins[0];
-        if (!active) throw new Error('No agency administrator to reset. Assign one first.');
-        await window.API.post(`/agency-control/sub-agencies/${encodeURIComponent(agencyId)}/reset-password`, { password });
+        await window.API.post(`/mother-company/agencies/${encodeURIComponent(agencyId)}/administrators/${encodeURIComponent(adminId)}/reset-password`, { password });
         close();
-        this.showToast('Administrator password has been reset.');
+        this.showToast('User password reset. They must change it at next login.');
       } catch (e) {
         if (errEl) { errEl.textContent = this.describe(e); errEl.classList.remove('hidden'); }
       }

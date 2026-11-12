@@ -11,6 +11,8 @@ const express = require('express');
 const { body, param } = require('express-validator');
 const { authMiddleware } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/rbac');
+const { Authorizer } = require('../auth/authorizer');
+const { ValidationError } = require('../utils/errors');
 const { getConn } = require('../utils/db');
 const { AgencyControlService } = require('../services/agencyControl.service');
 const { successResponse } = require('../utils/response');
@@ -34,6 +36,15 @@ const validate = (req, res, next) => {
 const svc = () => new AgencyControlService(getConn());
 
 // ── Sub-agencies ──────────────────────────────────────────────────────────────
+
+router.get('/my-context', authMiddleware, async (req, res, next) => {
+  try {
+    const data = await svc().getMyAgencyContext(req.user.userId);
+    res.json(successResponse(data));
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get('/sub-agencies',
   authMiddleware,
@@ -180,12 +191,25 @@ router.delete('/sub-agencies/:id',
     try {
       // FIX (audit F1): was unauthenticated with a userId='admin' fallback —
       // anyone could hard-delete an agency. Now gated and error-sanitized.
-      await svc().removeSubAgency(req.user.userId, req.params.id);
+      await svc().removeHierarchyEntity(req.user.userId, 'sub_agency', req.params.id);
       res.json({ success: true, deleted: true });
     } catch (err) {
       next(err);
     }
   });
+
+router.delete('/entities/:id', authMiddleware, [param('id').isString().notEmpty()], validate, async (req, res, next) => {
+  try {
+    const type = String(req.query.type || '');
+    const permission = type === 'sub_agency'
+      ? 'agency_control.agencies.manage'
+      : type === 'customer_tenant' ? 'agency_control.customers.manage' : null;
+    if (!permission) throw new ValidationError('Entity removal requires a supported entity type.');
+    Authorizer.assertPermission(req.user, permission);
+    const result = await svc().removeHierarchyEntity(req.user.userId, type, req.params.id);
+    res.json(successResponse(result));
+  } catch (err) { next(err); }
+});
 
 router.delete('/administrators/:id/permanent',
   authMiddleware,
@@ -195,6 +219,20 @@ router.delete('/administrators/:id/permanent',
   async (req, res, next) => {
     try {
       const result = await svc().permanentlyDeleteAdministrator(req.user.userId, req.params.id);
+      res.json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+router.post('/administrators/permanent-delete-by-email',
+  authMiddleware,
+  requirePermission('agency_control.agencies.manage'),
+  [body('email').isEmail().withMessage('Enter the email address of the agency administrator to remove.')],
+  validate,
+  async (req, res, next) => {
+    try {
+      const result = await svc().permanentlyDeleteAdministratorByEmail(req.user.userId, req.body.email);
       res.json({ success: true, data: result });
     } catch (err) {
       next(err);
@@ -224,6 +262,23 @@ router.post('/sub-agencies/:id/administrators',
       };
       const admin = await svc().addSubAgencyAdmin(req.user.userId, req.params.id, payload);
       res.json({ success: true, data: admin });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+router.post('/sub-agencies/:id/administrators/reassign-existing',
+  authMiddleware,
+  requirePermission('agency_control.agencies.manage'),
+  [
+    param('id').isString().notEmpty(),
+    body('email').isEmail().withMessage('Enter the email address of the existing agency administrator.'),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      const result = await svc().reassignExistingSubAgencyAdmin(req.user.userId, req.params.id, req.body.email);
+      res.json({ success: true, data: result });
     } catch (err) {
       next(err);
     }
@@ -294,6 +349,18 @@ router.get('/customers',
     } catch (err) {
       next(err);
     }
+  });
+
+router.get('/customers/:id',
+  authMiddleware,
+  requirePermission('agency_control.customers.manage'),
+  [param('id').isString().notEmpty()],
+  validate,
+  async (req, res, next) => {
+    try {
+      const customer = await svc().getCustomerDetails(req.user.userId, req.params.id);
+      res.json(successResponse({ customer }));
+    } catch (err) { next(err); }
   });
 
 router.post('/customers',
@@ -400,7 +467,11 @@ router.post('/customers/:id/access',
 router.put('/customers/:id',
   authMiddleware,
   requirePermission('agency_control.customers.manage'),
-  [param('id').isString().notEmpty(), body('name').isString().trim().notEmpty().withMessage('Customer name is required.').isLength({ max: 200 }).withMessage('Name must be 200 characters or fewer.')],
+  [
+    param('id').isString().notEmpty(),
+    body('name').isString().trim().notEmpty().withMessage('Customer name is required.').isLength({ max: 200 }).withMessage('Name must be 200 characters or fewer.'),
+    body('email').optional({ values: 'falsy' }).isEmail().withMessage('Enter a valid customer administrator email.'),
+  ],
   validate,
   async (req, res, next) => {
     try {
@@ -450,6 +521,36 @@ router.post('/customers/:id/administrators',
     } catch (err) { next(err); }
   });
 
+router.post('/customers/:id/administrators/reassign-existing',
+  authMiddleware,
+  requirePermission('agency_control.customers.manage'),
+  [
+    param('id').isString().notEmpty(),
+    body('email').isEmail().withMessage('Enter the email address of the existing customer account.'),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      const result = await svc().reassignExistingCustomerAdmin(req.user.userId, req.params.id, req.body.email);
+      res.json(successResponse(result));
+    } catch (err) { next(err); }
+  });
+
+router.post('/customers/:id/administrators/permanent-delete-by-email',
+  authMiddleware,
+  requirePermission('agency_control.customers.manage'),
+  [
+    param('id').isString().notEmpty(),
+    body('email').isEmail().withMessage('Enter the email address of the customer account to remove.'),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      const result = await svc().permanentlyDeleteCustomerAdminByEmail(req.user.userId, req.params.id, req.body.email);
+      res.json(successResponse(result));
+    } catch (err) { next(err); }
+  });
+
 router.get('/customers/:id/administrators',
   authMiddleware,
   requirePermission('agency_control.customers.manage'),
@@ -459,6 +560,21 @@ router.get('/customers/:id/administrators',
     try {
       const admins = await svc().listCustomerAdministrators(req.user.userId, req.params.id);
       res.json(successResponse({ administrators: admins }));
+    } catch (err) { next(err); }
+  });
+
+router.post('/customers/:id/reset-password',
+  authMiddleware,
+  requirePermission('agency_control.customers.manage'),
+  [
+    param('id').isString().notEmpty(),
+    body('password').isString().isLength({ min: 10 }).withMessage('Password must be at least 10 characters.'),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      const result = await svc().resetCustomerAdminPassword(req.user.userId, req.params.id, req.body || {});
+      res.json(successResponse(result));
     } catch (err) { next(err); }
   });
 

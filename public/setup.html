@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>Setup - BlackStack CRM</title>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com">
+  </script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'primary': '#000000',
+            'on-primary': '#ffffff',
+            'primary-container': '#1c1b1b',
+            'on-primary-container': '#858383',
+            'primary-fixed': '#e5e2e1',
+            'primary-fixed-dim': '#c8c6c5',
+            'on-primary-fixed': '#1c1b1b',
+            'on-primary-fixed-variant': '#474746',
+            'inverse-primary': '#c8c6c5',
+            'secondary': '#0058be',
+            'on-secondary': '#ffffff',
+            'secondary-container': '#2170e4',
+            'on-secondary-container': '#fefcff',
+            'secondary-fixed': '#d8e2ff',
+            'secondary-fixed-dim': '#adc6ff',
+            'on-secondary-fixed': '#001a42',
+            'on-secondary-fixed-variant': '#004395',
+            'tertiary': '#000000',
+            'on-tertiary': '#ffffff',
+            'tertiary-container': '#1c1b1a',
+            'on-tertiary-container': '#868382',
+            'tertiary-fixed': '#e6e2df',
+            'tertiary-fixed-dim': '#cac6c4',
+            'on-tertiary-fixed': '#1c1b1a',
+            'on-tertiary-fixed-variant': '#484645',
+            'error': '#ba1a1a',
+            'on-error': '#ffffff',
+            'error-container': '#ffdad6',
+            'on-error-container': '#93000a',
+            'background': '#fdf8f8',
+            'on-background': '#1c1b1b',
+            'surface': '#fdf8f8',
+            'on-surface': '#1c1b1b',
+            'surface-variant': '#e5e2e1',
+            'on-surface-variant': '#444748',
+            'surface-container': '#f1edec',
+            'surface-container-low': '#f7f3f2',
+            'surface-container-high': '#ebe7e6',
+            'surface-container-highest': '#e5e2e1',
+            'surface-container-lowest': '#ffffff',
+            'surface-bright': '#fdf8f8',
+            'surface-dim': '#ddd9d8',
+            'surface-tint': '#5f5e5e',
+            'inverse-surface': '#313030',
+            'inverse-on-surface': '#f4f0ef',
+            'outline': '#747878',
+            'outline-variant': '#c4c7c7',
+            'gold': '#b8860b',
+            'on-gold': '#ffffff',
+            'gold-container': '#1c1b1b',
+            'on-gold-container': '#f4e4b8',
+          },
+          borderRadius: {
+            'DEFAULT': '0.125rem',
+            'lg': '0.25rem',
+            'xl': '0.5rem',
+            'full': '0.75rem',
+          },
+          spacing: {
+            'stack-sm': '8px',
+            'stack-md': '16px',
+            'stack-lg': '32px',
+            'container-padding': '24px',
+            'gutter': '16px',
+            'unit': '4px',
+          },
+          fontFamily: {
+            'body': ['Inter', 'sans-serif'],
+            'display': ['Inter', 'sans-serif'],
+          },
+          fontSize: {
+            'body-sm': ['12px', { lineHeight: '16px' }],
+            'body-md': ['14px', { lineHeight: '20px' }],
+            'label-md': ['12px', { lineHeight: '16px', letterSpacing: '0.5px' }],
+            'h3': ['18px', { lineHeight: '24px', letterSpacing: '-0.3px' }],
+            'h1': ['28px', { lineHeight: '36px', letterSpacing: '-0.6px' }],
+            'display': ['32px', { lineHeight: '40px', letterSpacing: '-0.8px' }],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <style>
+    /* Setup wizard overrides: premium first-run screen */
+    .setup-container {
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .setup-section {
+      animation: fadeIn 0.35s ease-out;
+    }
+    .step-num {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      background: #e5e2e1;
+    }
+    .step-num.active {
+      background: #0058be;
+    }
+    .step-num.done {
+      background: #0058be;
+    }
+    .progress-line {
+      flex: 1;
+      height: 2px;
+      background: #e5e2e1;
+      margin: 0 8px;
+      border-radius: 2px;
+    }
+    .progress-line.done {
+      background: #0058be;
+    }
+    .key-hint {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      background: #f1edec;
+      border: 1px solid #c4c7c7;
+      padding: 8px 12px;
+      border-radius: 6px;
+      color: #444748;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body class="bg-background font-body-md text-on-background antialiased">
+  <div id="app">
+    <!-- Setup Wizard -->
+    <div class="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
+      <!-- Decorative background — subtle black on white -->
+      <div class="absolute -top-[20%] -right-[10%] w-[60%] h-[80%] rounded-full bg-secondary opacity-5 blur-3xl pointer-events-none"></div>
+      <div class="absolute top-[40%] -left-[20%] w-[40%] h-[60%] rounded-full bg-primary opacity-5 blur-3xl pointer-events-none"></div>
+
+      <div class="w-full max-w-sm setup-container relative z-10">
+        <!-- Logo + Title -->
+        <div class="flex flex-col items-center mb-stack-lg text-center">
+          <div class="w-12 h-12 bg-primary flex items-center justify-center rounded-xl mb-stack-md shadow-sm">
+            <span class="material-symbols-outlined text-on-primary text-[28px]">token</span>
+          </div>
+          <h1 class="font-display text-display text-on-surface text-center">Activate BlackStack</h1>
+          <p class="font-body-sm text-body-sm text-on-surface-variant text-center mt-1">Activate your software to continue with the initial setup.</p>
+        </div>
+
+        <!-- Progress indicator -->
+        <div class="w-full flex items-center justify-center mb-stack-md" id="setup-progress">
+          <div class="flex items-center gap-stack-sm">
+            <div class="step-num active">1</div>
+            <div class="progress-line done"></div>
+            <div class="step-num">2</div>
+            <div class="progress-line"></div>
+            <div class="step-num">3</div>
+            <div class="progress-line"></div>
+            <div class="step-num">4</div>
+          </div>
+        </div>
+
+        <!-- Step content -->
+        <div id="step-container" class="setup-section">
+          <!-- Step 1: Activation -->
+          <div id="step-activation" class="step active">
+            <form id="activation-form" class="space-y-4" novalidate>
+              <div>
+                <label for="activation-key" class="block font-label-md text-label-md text-on-surface mb-1">Activation Key</label>
+                <input type="text" id="activation-key" name="key" autocomplete="off"
+                       class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2.5 text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary/40 placeholder:text-on-surface-variant/70 transition-shadow"
+                       placeholder="Enter your activation key" maxlength="200"/>
+                <p class="font-body-sm text-body-sm text-on-surface-variant/70 mt-1 text-xs">
+                  The key contains special characters (+, /, =). Enter it exactly as provided.
+                </p>
+                <p id="activation-error" class="hidden text-error font-body-sm text-body-sm mt-1"></p>
+              </div>
+              <div class="flex gap-stack-sm">
+                <button type="submit" id="activation-submit"
+                        class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-primary text-on-primary font-label-md text-label-md uppercase tracking-wider hover:bg-primary/90 transition-colors shadow-sm">
+                  <span class="material-symbols-outlined text-[18px]">key</span>
+                  Activate Software
+                </button>
+                <button type="button" id="activation-clear" class="px-4 py-2.5 rounded-lg border border-outline-variant/50 text-on-surface-variant hover:bg-surface-container transition-colors text-body-md">
+                  Clear
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Step 2: Admin account -->
+          <div id="step-admin" class="step">
+            <form id="admin-form" class="space-y-4" novalidate>
+              <div>
+                <label for="admin-name" class="block font-label-md text-label-md text-on-surface mb-1">Full Name</label>
+                <input type="text" id="admin-name" name="fullName" autocomplete="name"
+                       class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2.5 text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary/40"
+                       placeholder="Jane Doe"/>
+                <p id="admin-name-error" class="hidden text-error font-body-sm text-body-sm mt-1"></p>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label for="admin-username" class="block font-label-md text-label-md text-on-surface mb-1">Username</label>
+                  <input type="text" id="admin-username" name="username" autocomplete="username"
+                         class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2.5 text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary/40"
+                         placeholder="jane"/>
+                  <p id="admin-username-error" class="hidden text-error font-body-sm text-body-sm mt-1"></p>
+                </div>
+                <div>
+                  <label for="admin-email" class="block font-label-md text-label-md text-on-surface mb-1">Email Address</label>
+                  <input type="email" id="admin-email" name="email" autocomplete="email"
+                         class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2.5 text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary/40"
+                         placeholder="jane@example.com"/>
+                  <p id="admin-email-error" class="hidden text-error font-body-sm text-body-sm mt-1"></p>
+                </div>
+              </div>
+              <div>
+                <label for="admin-password" class="block font-label-md text-label-md text-on-surface mb-1">Password</label>
+                <div class="relative">
+                  <input type="password" id="admin-password" name="password" autocomplete="new-password"
+                         class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2.5 pr-10 text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary/40 placeholder:text-on-surface-variant/70"
+                         placeholder="At least 8 characters"/>
+                  <button type="button" id="toggle-password" class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded hover:bg-surface-container transition-colors" aria-label="Toggle password visibility">
+                    <span class="material-symbols-outlined text-[18px] text-on-surface-variant">visibility_off</span>
+                  </button>
+                </div>
+                <p id="admin-password-error" class="hidden text-error font-body-sm text-body-sm mt-1"></p>
+              </div>
+              <div>
+                <label for="admin-confirm" class="block font-label-md text-label-md text-on-surface mb-1">Confirm Password</label>
+                <input type="password" id="admin-confirm" name="confirmPassword" autocomplete="new-password"
+                       class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2.5 text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary/40"
+                       placeholder="Re-enter password"/>
+                <p id="admin-confirm-error" class="hidden text-error font-body-sm text-body-sm mt-1"></p>
+              </div>
+              <p id="admin-error" class="hidden text-error font-body-sm text-body-sm mt-1"></p>
+            </form>
+          </div>
+
+          <!-- Step 3: Company -->
+          <div id="step-company" class="step">
+            <form id="company-form" class="space-y-4" novalidate>
+              <div>
+                <label for="company-name" class="block font-label-md text-label-md text-on-surface mb-1">Company Name *</label>
+                <input type="text" id="company-name" name="companyName" autocomplete="organization"
+                       class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2.5 text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary/40"
+                       placeholder="Acme Corporation"/>
+                <p id="company-name-error" class="hidden text-error font-body-sm text-body-sm mt-1"></p>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label for="company-email" class="block font-label-md text-label-md text-on-surface mb-1">Business Email</label>
+                  <input type="email" id="company-email" name="businessEmail" autocomplete="email"
+                         class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2.5 text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary/40"
+                         placeholder="jane@example.com"/>
+                </div>
+                <div>
+                  <label for="company-phone" class="block font-label-md text-label-md text-on-surface mb-1">Phone Number</label>
+                  <input type="tel" id="company-phone" name="phone" autocomplete="tel"
+                         class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2.5 text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary/40"
+                         placeholder="+91 98765 43210"/>
+                </div>
+              </div>
+              <div>
+                <label for="company-address" class="block font-label-md text-label-md text-on-surface mb-1">Address</label>
+                <textarea id="company-address" name="address" rows="3"
+                          class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2.5 text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary/40"></textarea>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label for="company-currency" class="block font-label-md text-label-md text-on-surface mb-1">Currency</label>
+                  <select id="company-currency" name="currency"
+                          class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2.5 text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary/40">
+                    <option value="INR">Indian Rupee (₹)</option>
+                    <option value="USD">US Dollar ($)</option>
+                    <option value="GBP">Pound Sterling (£)</option>
+                    <option value="EUR">Euro (€)</option>
+                    <option value="AED">UAE Dirham (د.إ)</option>
+                    <option value="SGD">Singapore Dollar (S$)</option>
+                    <option value="MYR">Malaysian Ringgit (RM)</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="company-gstin" class="block font-label-md text-label-md text-on-surface mb-1">GSTIN / Tax Number</label>
+                  <input type="text" id="company-gstin" name="gstin" autocomplete="off"
+                         class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg px-3 py-2.5 text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary/40"
+                         placeholder="29ABCDE1234F1Z5"/>
+                </div>
+              </div>
+              <p id="company-error" class="hidden text-error font-body-sm text-body-sm mt-1"></p>
+            </form>
+          </div>
+
+          <!-- Step 4: Complete -->
+          <div id="step-complete" class="step">
+            <div class="flex flex-col items-center justify-center py-8">
+              <div class="w-16 h-16 bg-secondary flex items-center justify-center rounded-full mb-stack-lg">
+                <span class="material-symbols-outlined text-[36px] text-on-secondary">check_circle</span>
+              </div>
+              <h2 class="font-display text-h1 text-on-surface mb-stack-sm">Setup Complete</h2>
+              <p class="font-body-sm text-body-sm text-on-surface-variant text-center max-w-sm">
+                Your administrator account has been created and your company is configured.
+                You can now sign in to BlackStack.
+              </p>
+              <p class="font-body-sm text-body-sm text-on-surface-variant text-center mt-2">
+                <span class="font-medium text-on-surface">Admin:</span>
+                <span id="complete-email" class="text-primary"></span>
+              </p>
+            </div>
+            <button id="complete-complete-btn" class="mt-6 px-6 py-2.5 rounded-lg bg-primary text-on-primary font-label-md text-label-md uppercase tracking-wider hover:bg-primary/90 transition-colors shadow-sm">
+              Go to Dashboard
+            </button>
+          </div>
+        </div>
+
+        <!-- Footer hint -->
+        <p class="text-center font-body-sm text-body-sm text-on-surface-variant/60 mt-4">
+          BlackStack CRM V2
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api/client.js">
+  </script>
+  <script src="/js/api/auth.js">
+  </script>
+  <script src="/js/setup/setup-wizard.js">
+  </script>
+</body>
+</html>

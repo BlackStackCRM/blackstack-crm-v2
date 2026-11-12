@@ -1,4 +1,5 @@
 const { getConn } = require('../utils/db');
+const { resolveCaller } = require('../services/rbac.service');
 
 const BYPASS_PREFIXES = ['/auth/', '/wallet/'];
 
@@ -12,6 +13,15 @@ function isSubscriptionBypassPath(pathname = '') {
 function createCheckSubscriptionStatus(getDatabase = getConn) {
   return function checkSubscriptionStatus(req, res, next) {
     try {
+      const db = getDatabase();
+      // `req.user.role` is the legacy database role (often `ADMIN`), not the
+      // normalized hierarchy role. Resolve it from SQLite so only a real
+      // Mother Company/platform account bypasses tenant subscription gating.
+      const caller = req.user && req.user.userId
+        ? resolveCaller(db, { userId: req.user.userId })
+        : null;
+      if (caller && caller.role === 'platform') return next();
+
       const companyId = req.user && (req.user.companyId || req.user.company_id);
       if (!companyId) {
         return res.status(403).json({
@@ -20,7 +30,6 @@ function createCheckSubscriptionStatus(getDatabase = getConn) {
         });
       }
 
-      const db = getDatabase();
       const latest = db.get(
         `SELECT status, COALESCE(end_date, expires_at) AS end_date
          FROM subscriptions WHERE company_id=?

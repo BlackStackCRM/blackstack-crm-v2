@@ -1,4 +1,6 @@
-require('dotenv').config();
+const { loadRuntimeEnvironment } = require('./config/runtimeEnvironment');
+const serverEnvPath = process.env.BLACKSTACK_ENV_PATH || require('path').resolve(__dirname, '../.env');
+loadRuntimeEnvironment({ envPath: serverEnvPath });
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -211,6 +213,32 @@ app.get('/api', (req, res) => {
   });
 });
 
+function redact404DiagnosticBody(value) {
+  if (Array.isArray(value)) return value.map(redact404DiagnosticBody);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    /password|token|secret|authorization|api.?key|credential|email|username|full.?name|phone|address/i.test(key)
+      ? '[REDACTED]'
+      : redact404DiagnosticBody(item),
+  ]));
+}
+
+// Temporary diagnostic for the customer administrator 404 investigation.
+// This middleware only runs for requests that fell through every registered
+// route. Credential-like body fields are redacted before being written.
+app.use((req, res, next) => {
+  let body = '';
+  try {
+    body = JSON.stringify(redact404DiagnosticBody(req.body || {}));
+    if (body.length > 3000) body = `${body.slice(0, 3000)}…[truncated]`;
+  } catch {
+    body = '[unavailable]';
+  }
+  console.error(`[404 CATCH-ALL] Request-ID: ${req.requestId} | Method: ${req.method} | URL: ${req.originalUrl} | Body: ${body}`);
+  next();
+});
+
 app.use((req, res) => {
   res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'The requested resource was not found.' } });
 });
@@ -387,6 +415,7 @@ async function shutdown(signal) {
     const { stopRetryWorker } = require('./services/retry-worker');
     stopRetryWorker();
   } catch { /* worker may not have been started */ }
+  try { require('./services/subscriptionRenewalWorker').stopSubscriptionRenewalWorker(); } catch { /* worker may not have been started */ }
   if (server) {
     server.close(() => {
       try {

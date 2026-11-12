@@ -20,7 +20,7 @@ window.PageModules.search = {
     if (!main) return () => {};
     // Load default currency from settings
     try {
-      const settings = await API.get('/settings');
+      const settings = await API.get('/settings', {}, { silent: true });
       this.currentCurrency = settings.defaultCurrency || 'USD';
     } catch { /* use default */ }
     const initialQuery = new URLSearchParams(window.location.hash.split('?')[1] || '').get('q') || '';

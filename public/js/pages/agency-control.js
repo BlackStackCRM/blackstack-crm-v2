@@ -9,33 +9,51 @@ window.PageModules.agencyControl = {
     } catch { return []; }
   },
   role() {
+    if (window.RolePermissions) return window.RolePermissions.role();
     try {
       const user = JSON.parse(localStorage.getItem('crm_user') || '{}');
-      return String(user.role || '').toUpperCase();
+      return String(user.hierarchyRole || user.role || '').toLowerCase();
     } catch { return ''; }
   },
   can(code) {
+    const role = this.role();
+    const roleCapabilities = {
+      'agency_control.subagencies.view': 'canManageSubAgencies',
+      'agency_control.subagencies.create': 'canCreateSubAgency',
+      'agency_control.agencies.manage': 'canManageSubAgencies',
+      'agency_control.customers.manage': 'canManageCustomers',
+    };
+    if (roleCapabilities[code] && window.RolePermissions) {
+      return window.RolePermissions[roleCapabilities[code]]();
+    }
+    if (roleCapabilities[code]) return ['platform', 'agency'].includes(role) || (code === 'agency_control.customers.manage' && role === 'sub_agency');
     const perms = this.permissions();
     if (perms.includes('*')) return true;
     if (perms.includes(code)) return true;
-    if (code && this.role() === 'ADMIN') return true;
+    if (code && role === 'platform') return true;
     return false;
   },
   esc(value) {
     return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   },
-  async init() {
+  async init(mode) {
     const host = document.getElementById('page-container');
-    if (!this.can('agency_control.customers.manage') && !this.can('agency_control.subagencies.view')) {
+    const customersOnly = mode === 'customers-only';
+    const role = this.role();
+    const allowed = customersOnly
+      ? role === 'sub_agency' && this.can('agency_control.customers.manage')
+      : ['platform', 'agency'].includes(role) && this.can('agency_control.subagencies.view');
+    if (!allowed) {
       host.innerHTML = '<div class="max-w-lg mx-auto mt-12 text-center"><h1 class="font-display text-h2">Agency control access required</h1></div>';
       return () => {};
     }
     this.selectedAgencies = [];
     this.selectedCustomers = [];
-    host.innerHTML = `<div class="mb-stack-lg"><h1 class="font-display text-h1">Distribution Agency Control</h1><p class="text-body-sm text-on-surface-variant">Manage sub-agencies and customers within your agency scope.</p></div>
+    const isSubAgency = role === 'sub_agency';
+    host.innerHTML = `<div class="mb-stack-lg"><h1 class="font-display text-h1">${customersOnly ? 'Customer Tenants' : 'Distribution Agency Control'}</h1><p class="text-body-sm text-on-surface-variant">${customersOnly ? 'Manage customer tenants within your sub-agency.' : 'Manage sub-agencies and customers within your agency scope.'}</p></div>
       <div id="ac-error" class="hidden mb-stack-md rounded-lg border border-error/40 px-4 py-3 text-error"></div>
-      <div id="ac-bulk-bar" class="hidden mb-stack-md rounded-xl border border-outline-variant/60 bg-surface-container p-stack-sm">
+      ${this.can('agency_control.subagencies.view') ? `<div id="ac-bulk-bar" class="hidden mb-stack-md rounded-xl border border-outline-variant/60 bg-surface-container p-stack-sm">
         <div class="flex flex-wrap items-center gap-stack-sm">
           <span class="font-body-sm text-body-sm text-on-surface-variant">Selected <span id="ac-bulk-count">0</span></span>
           <div class="flex gap-stack-sm">
@@ -45,7 +63,7 @@ window.PageModules.agencyControl = {
           </div>
           <button id="ac-bulk-clear" class="text-body-sm text-on-surface-variant underline ml-auto">Clear selection</button>
         </div>
-      </div>
+      </div>` : ''}
       <div id="ac-cust-bulk-bar" class="hidden mb-stack-md rounded-xl border border-outline-variant/60 bg-surface-container p-stack-sm">
         <div class="flex flex-wrap items-center gap-stack-sm">
           <span class="font-body-sm text-body-sm text-on-surface-variant">Customers selected <span id="ac-cust-bulk-count">0</span></span>
@@ -134,7 +152,12 @@ window.PageModules.agencyControl = {
       console.log('[agency-control] REFRESH DATA:', agencyData);
       this.agencies = agencyData.agencies || [];
       this.parentAgency = agencyData.parentAgency || null;
-      this.customerAgencies = this.parentAgency ? [this.parentAgency, ...this.agencies] : this.agencies;
+      const user = window.AuthAPI && window.AuthAPI.getUser ? window.AuthAPI.getUser() : {};
+      const ownAgency = this.role() === 'sub_agency' && user && user.agencyId
+        ? [{ id: user.agencyId, name: user.agencyName || 'My Sub-agency', status: 'ACTIVE' }]
+        : [];
+      this.customerAgencies = ownAgency.length ? ownAgency
+        : (this.parentAgency ? [this.parentAgency, ...this.agencies] : this.agencies);
       this.customers = customerData.customers || [];
       this.renderAgencies();
       await this.renderParentOptions();
@@ -392,10 +415,45 @@ window.PageModules.agencyControl = {
       } catch (e) {
         if (errEl) {
           const detail = this.apiErrorText(e, 'Could not assign admin.');
-          errEl.textContent = /already exists|already registered|already an administrator/i.test(detail)
-            ? `${detail} This email is already registered. If this is a previously removed user, go to User Management or Agency Control → View Details → Administrators to permanently delete them, or contact support to link the existing account.`
-            : detail;
-          errEl.classList.remove('hidden');
+          if (/already assigned to another agency|already linked to another agency/i.test(detail)
+            && this.role() === 'platform') {
+            errEl.innerHTML = `${this.esc(detail)}<div class="flex flex-wrap items-center gap-3 mt-3"><button id="ac-a-reassign" type="button" class="rounded-lg bg-primary text-on-primary px-3 py-2">Reassign existing account here</button><button id="ac-a-permanent-delete" type="button" class="rounded-lg border border-error/50 text-error px-3 py-2">Permanently remove account</button><span class="text-on-surface-variant">Reassignment preserves the existing CRM data. Permanent removal is blocked when dependent records exist.</span></div>`;
+            errEl.classList.remove('hidden');
+            document.getElementById('ac-a-reassign')?.addEventListener('click', async () => {
+              const email = val('ac-a-email').trim();
+              if (!confirm(`Reassign ${email} to this agency? Their existing CRM data will be preserved.`)) return;
+              const button = document.getElementById('ac-a-reassign');
+              if (button) { button.disabled = true; button.textContent = 'Reassigning…'; }
+              try {
+                await window.API.post(`/agency-control/sub-agencies/${encodeURIComponent(agencyId)}/administrators/reassign-existing`, { email });
+                close();
+                this.showToast('Existing account reassigned. Its CRM data was preserved.');
+                this.refresh();
+              } catch (reassignError) {
+                if (errEl) {
+                  errEl.textContent = this.apiErrorText(reassignError, 'Could not reassign this account.');
+                  errEl.classList.remove('hidden');
+                }
+              }
+            });
+            document.getElementById('ac-a-permanent-delete')?.addEventListener('click', async () => {
+              const email = val('ac-a-email').trim();
+              if (!confirm(`Permanently remove ${email} from Supabase Auth and BlackStack? This cannot be undone. Dependent records will block deletion.`)) return;
+              try {
+                await window.API.post('/agency-control/administrators/permanent-delete-by-email', { email });
+                errEl.textContent = 'Account permanently removed. Click Assign to create and assign a fresh account using the entered details.';
+                errEl.classList.remove('hidden');
+              } catch (deleteError) {
+                errEl.textContent = this.apiErrorText(deleteError, 'Could not permanently remove this account.');
+                errEl.classList.remove('hidden');
+              }
+            });
+          } else {
+            errEl.textContent = /already exists|already registered|already an administrator/i.test(detail)
+              ? `${detail} To permanently remove an existing agency administrator, open Agency Control → View Details → Administrators and use Permanently delete. Deletion is blocked while dependent records exist.`
+              : detail;
+            errEl.classList.remove('hidden');
+          }
         }
       }
     });
@@ -526,8 +584,9 @@ window.PageModules.agencyControl = {
         <div class="relative inline-block text-left">
           <button data-customer-actions="${this.esc(c.id)}" class="rounded border px-2 py-1 text-body-sm">Actions</button>
           <div data-customer-menu="${this.esc(c.id)}" class="hidden absolute right-0 mt-2 w-44 rounded border bg-white shadow z-10">
+            <button data-cust-action="view-details" data-id="${this.esc(c.id)}" class="block w-full text-left px-3 py-2 text-body-sm hover:bg-gray-100">View Details</button>
             <button data-cust-action="edit" data-id="${this.esc(c.id)}" class="block w-full text-left px-3 py-2 text-body-sm hover:bg-gray-100">Edit Name</button>
-            <button data-cust-action="reassign" data-id="${this.esc(c.id)}" class="block w-full text-left px-3 py-2 text-body-sm hover:bg-gray-100">Reassign Agency</button>
+            ${this.role() !== 'sub_agency' ? `<button data-cust-action="reassign" data-id="${this.esc(c.id)}" class="block w-full text-left px-3 py-2 text-body-sm hover:bg-gray-100">Reassign Agency</button>` : ''}
             <button data-cust-action="add-customer-admin" data-id="${this.esc(c.id)}" class="block w-full text-left px-3 py-2 text-body-sm hover:bg-gray-100">Add Admin</button>
             <button data-cust-action="access" data-id="${this.esc(c.id)}" data-status="${c.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE'}" class="block w-full text-left px-3 py-2 text-body-sm hover:bg-gray-100">${c.status === 'ACTIVE' ? 'Suspend' : 'Activate'}</button>
             <button data-cust-action="remove" data-id="${this.esc(c.id)}" class="block w-full text-left px-3 py-2 text-body-sm text-error hover:bg-gray-100">Remove</button>
@@ -569,7 +628,8 @@ window.PageModules.agencyControl = {
         const action = item.getAttribute('data-cust-action');
         const id = item.getAttribute('data-id');
         host.querySelectorAll('[data-customer-menu]').forEach((m) => m.classList.add('hidden'));
-        if (action === 'edit') this.openCustomerEditModal(id);
+        if (action === 'view-details') this.openCustomerDetailsModal(id);
+        else if (action === 'edit') this.openCustomerEditModal(id);
         else if (action === 'reassign') this.openCustomerReassignModal(id);
         else if (action === 'add-customer-admin') this.openAddCustomerAdminModal(id);
         else if (action === 'access') this.toggleCustomerAccess(id, item.getAttribute('data-status'));
@@ -595,6 +655,49 @@ window.PageModules.agencyControl = {
     document.addEventListener('click', () => {
       host.querySelectorAll('[data-customer-menu]').forEach((m) => m.classList.add('hidden'));
     });
+  },
+  async openCustomerDetailsModal(customerId) {
+    const host = document.getElementById('ac-modal');
+    if (!host) return;
+    host.innerHTML = `<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <section id="ac-customer-details-modal" role="dialog" aria-modal="true" aria-labelledby="ac-customer-details-title" class="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-surface-container p-6 border border-outline-variant/40 shadow-xl">
+        <div class="flex items-start justify-between gap-4">
+          <div><h2 id="ac-customer-details-title" class="font-display text-h3 text-on-surface">Customer details</h2><p class="mt-1 text-body-sm text-on-surface-variant">Read-only customer tenant information.</p></div>
+          <button id="ac-customer-details-close-top" type="button" aria-label="Close" class="rounded px-3 py-1 text-on-surface-variant hover:bg-surface-container-high">×</button>
+        </div>
+        <div id="ac-customer-details-content" class="mt-5 flex items-center justify-center gap-3 py-10 text-body-sm text-on-surface-variant"><span class="inline-block h-5 w-5 animate-spin rounded-full border-2 border-outline-variant border-t-primary" aria-hidden="true"></span><span>Loading customer details…</span></div>
+        <div class="mt-6 flex justify-end"><button id="ac-customer-details-close" type="button" class="rounded-lg bg-primary px-4 py-2 text-body-sm text-on-primary">Close</button></div>
+      </section>
+    </div>`;
+    const close = () => { host.innerHTML = ''; };
+    document.getElementById('ac-customer-details-close')?.addEventListener('click', close);
+    document.getElementById('ac-customer-details-close-top')?.addEventListener('click', close);
+
+    try {
+      const result = await window.API.get(`/agency-control/customers/${encodeURIComponent(customerId)}`);
+      const customer = result && (result.customer || result);
+      if (!customer) throw new Error('Customer details were not returned.');
+      const content = document.getElementById('ac-customer-details-content');
+      if (!content || !document.getElementById('ac-customer-details-modal')) return;
+      const created = customer.createdAt ? new Date(customer.createdAt) : null;
+      const createdLabel = created && !Number.isNaN(created.getTime()) ? created.toLocaleString() : customer.createdAt || '—';
+      const administrators = Array.isArray(customer.administrators) ? customer.administrators : [];
+      const adminRows = administrators.map((admin) => `<tr class="border-t border-outline-variant/40"><td class="py-2 pr-3">${this.esc(admin.fullName || '—')}</td><td class="py-2 pr-3">${this.esc(admin.email || '—')}</td><td class="py-2 pr-3">${this.esc(admin.username || '—')}</td><td class="py-2">${this.esc(admin.status || '—')}</td></tr>`).join('');
+      content.className = 'mt-5 space-y-5';
+      content.innerHTML = `<dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div><dt class="text-body-sm text-on-surface-variant">Customer name</dt><dd class="mt-1 text-on-surface">${this.esc(customer.customerName || customer.companyName || '—')}</dd></div>
+        <div><dt class="text-body-sm text-on-surface-variant">Full name</dt><dd class="mt-1 text-on-surface">${this.esc(customer.fullName || '—')}</dd></div>
+        <div><dt class="text-body-sm text-on-surface-variant">Email address</dt><dd class="mt-1 text-on-surface">${this.esc(customer.email || '—')}</dd></div>
+        <div><dt class="text-body-sm text-on-surface-variant">Status</dt><dd class="mt-1">${this.badge(String(customer.status || 'UNKNOWN').toUpperCase())}</dd></div>
+        <div><dt class="text-body-sm text-on-surface-variant">Company / tenant</dt><dd class="mt-1 text-on-surface">${this.esc(customer.companyName || '—')}</dd></div>
+        <div><dt class="text-body-sm text-on-surface-variant">Parent sub-agency / agency</dt><dd class="mt-1 text-on-surface">${this.esc(customer.parentAgencyName || '—')}${customer.parentAgencyCode ? ` (${this.esc(customer.parentAgencyCode)})` : ''}</dd></div>
+        <div><dt class="text-body-sm text-on-surface-variant">Date created</dt><dd class="mt-1 text-on-surface">${this.esc(createdLabel)}</dd></div>
+      </dl>
+      <div><h3 class="font-medium text-on-surface">Administrators</h3>${adminRows ? `<div class="mt-2 overflow-x-auto"><table class="w-full text-left text-body-sm"><thead><tr><th class="pb-2 pr-3">Name</th><th class="pb-2 pr-3">Email</th><th class="pb-2 pr-3">Username</th><th class="pb-2">Status</th></tr></thead><tbody>${adminRows}</tbody></table></div>` : '<p class="mt-2 text-body-sm text-on-surface-variant">No customer administrator assigned.</p>'}</div>`;
+    } catch (error) {
+      close();
+      this.showToast(this.apiErrorText(error, 'Could not load customer details.'));
+    }
   },
   openCustomerEditModal(customerId) {
     const customer = this.customers.find((c) => c.id === customerId) || null;
@@ -661,8 +764,54 @@ window.PageModules.agencyControl = {
         await window.API.post(`/agency-control/customers/${encodeURIComponent(customerId)}/administrators`, payload);
         close();
         this.showToast('Customer administrator assigned successfully.');
+        await this.refresh();
       } catch (e) {
-        if (errEl) { errEl.textContent = this.apiErrorText(e, 'Could not assign customer admin.'); errEl.classList.remove('hidden'); }
+        if (!errEl) return;
+        const detail = this.apiErrorText(e, 'Could not assign customer admin.');
+        if (/already exists|already registered|already belongs to an account/i.test(detail)) {
+          if (this.role() === 'platform') {
+            errEl.innerHTML = `${this.esc(detail)}
+              <p class="mt-2 text-on-surface-variant">You can move this existing login to the selected customer, keeping its password. Its CRM records remain with the current company. Permanent removal deletes only the login and is blocked if the account owns dependent records.</p>
+              <div class="flex flex-wrap gap-2 mt-3">
+                <button id="ac-ca-reassign" type="button" class="rounded-lg bg-primary text-on-primary px-3 py-2">Assign existing account here</button>
+                <button id="ac-ca-permanent-delete" type="button" class="rounded-lg border border-error/50 text-error px-3 py-2">Permanently remove account</button>
+              </div>`;
+            document.getElementById('ac-ca-reassign')?.addEventListener('click', async () => {
+              if (!confirm(`Move ${payload.email} to ${customer?.name || 'this customer'}? The existing password is kept; CRM records remain with their current company.`)) return;
+              const button = document.getElementById('ac-ca-reassign');
+              if (button) { button.disabled = true; button.textContent = 'Assigning…'; }
+              try {
+                await window.API.post(`/agency-control/customers/${encodeURIComponent(customerId)}/administrators/reassign-existing`, { email: payload.email });
+                close();
+                this.showToast('Existing customer login assigned.');
+                await this.refresh();
+              } catch (reassignError) {
+                errEl.textContent = this.apiErrorText(reassignError, 'Could not assign the existing account.');
+                errEl.classList.remove('hidden');
+              }
+            });
+            document.getElementById('ac-ca-permanent-delete')?.addEventListener('click', async () => {
+              if (!confirm(`Permanently remove ${payload.email} from BlackStack and Supabase Auth? This removes only the login, never the customer’s CRM records. Dependent user records block deletion.`)) return;
+              const button = document.getElementById('ac-ca-permanent-delete');
+              if (button) { button.disabled = true; button.textContent = 'Removing…'; }
+              try {
+                await window.API.post(`/agency-control/customers/${encodeURIComponent(customerId)}/administrators/permanent-delete-by-email`, { email: payload.email });
+                errEl.textContent = 'The existing login was permanently removed. Press Assign again to create a new customer administrator with these details.';
+                errEl.classList.remove('hidden');
+                if (button) button.remove();
+                document.getElementById('ac-ca-reassign')?.remove();
+              } catch (deleteError) {
+                errEl.textContent = this.apiErrorText(deleteError, 'Could not permanently remove this account.');
+                errEl.classList.remove('hidden');
+              }
+            });
+          } else {
+            errEl.textContent = `${detail} Ask a platform administrator to assign the existing customer login or permanently remove it.`;
+          }
+        } else {
+          errEl.textContent = detail;
+        }
+        errEl.classList.remove('hidden');
       }
     });
   },

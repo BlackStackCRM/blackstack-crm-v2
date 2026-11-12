@@ -167,6 +167,81 @@ class WalletSubscriptionService {
     return this.db.all(`SELECT s.*, c.name AS account_name FROM subscriptions s JOIN companies c ON c.id=s.company_id ORDER BY s.expires_at ASC`);
   }
 
+  subscriptionDetails(userId, subscriptionId) {
+    const caller = this.caller(userId);
+    if (caller.role !== 'platform') throw new AuthorizationError('Mother Company access required.');
+    const subscription = this.db.get(`
+      SELECT s.*, c.name AS account_name, c.status AS account_status,
+        p.name AS current_plan_name,
+        (SELECT e.provider_payment_id FROM payment_webhook_events e
+          WHERE e.subscription_id=s.id ORDER BY e.processed_at DESC LIMIT 1) AS provider_payment_id
+      FROM subscriptions s
+      JOIN companies c ON c.id=s.company_id
+      LEFT JOIN subscription_plans p ON p.id=s.plan_id
+      WHERE s.id=?`, [subscriptionId]);
+    if (!subscription) throw new NotFoundError('Subscription', subscriptionId);
+    return subscription;
+  }
+
+  manuallyExtendSubscription(userId, subscriptionId, body = {}) {
+    const caller = this.caller(userId);
+    if (caller.role !== 'platform') throw new AuthorizationError('Mother Company access required.');
+    const amount = Number(body.amount ?? body.durationValue);
+    const unit = String(body.unit || body.durationUnit || 'day').toLowerCase();
+    if (!Number.isInteger(amount) || amount < 1 || !['day', 'month'].includes(unit)) {
+      throw new ValidationError('Enter a positive whole number of days or months.');
+    }
+    const current = this.db.get('SELECT * FROM subscriptions WHERE id=?', [subscriptionId]);
+    if (!current) throw new NotFoundError('Subscription', subscriptionId);
+    const previousEnd = current.end_date || current.expires_at;
+    const newEnd = endOfUtcDay(addDuration(previousEnd, amount, unit)).toISOString();
+    return this.db.transaction(() => {
+      this.db.run('UPDATE subscriptions SET end_date=?, expires_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?', newEnd, newEnd, subscriptionId);
+      this.audit(caller.localUserId, 'SUBSCRIPTION_MANUAL_RENEW', 'subscription', subscriptionId, {
+        performedBy: 'platform_admin', manualOverride: true, previousEndDate: previousEnd, endDate: newEnd, amount, unit,
+      }, current.company_id);
+      return this.db.get('SELECT * FROM subscriptions WHERE id=?', [subscriptionId]);
+    })();
+  }
+
+  manuallyChangeSubscriptionStatus(userId, subscriptionId, status) {
+    const caller = this.caller(userId);
+    if (caller.role !== 'platform') throw new AuthorizationError('Mother Company access required.');
+    const nextStatus = String(status || '').toUpperCase();
+    if (!['PENDING', 'ACTIVE', 'SUSPENDED', 'CANCELLED', 'EXPIRED'].includes(nextStatus)) {
+      throw new ValidationError('Invalid subscription status.');
+    }
+    const current = this.db.get('SELECT * FROM subscriptions WHERE id=?', [subscriptionId]);
+    if (!current) throw new NotFoundError('Subscription', subscriptionId);
+    return this.db.transaction(() => {
+      this.db.run('UPDATE subscriptions SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?', nextStatus, subscriptionId);
+      this.audit(caller.localUserId, 'MANUAL_OVERRIDE', 'subscription', subscriptionId, {
+        performedBy: 'platform_admin', previousStatus: current.status, status: nextStatus,
+        manualOverride: true,
+      }, current.company_id);
+      return this.db.get('SELECT * FROM subscriptions WHERE id=?', [subscriptionId]);
+    })();
+  }
+
+  deleteSubscription(userId, subscriptionId) {
+    const caller = this.caller(userId);
+    if (caller.role !== 'platform') throw new AuthorizationError('Mother Company access required.');
+    const current = this.db.get('SELECT * FROM subscriptions WHERE id=?', [subscriptionId]);
+    if (!current) throw new NotFoundError('Subscription', subscriptionId);
+    return this.db.transaction(() => {
+      const payment = this.db.get('SELECT provider_payment_id FROM payment_webhook_events WHERE subscription_id=? LIMIT 1', [subscriptionId]);
+      const walletTransaction = this.db.get('SELECT id FROM wallet_transactions WHERE subscription_id=? LIMIT 1', [subscriptionId]);
+      if (payment || walletTransaction) {
+        throw new AppError('This subscription has payment history and cannot be deleted without removing financial records.', 'SUBSCRIPTION_HAS_PAYMENT_HISTORY', 409);
+      }
+      this.audit(caller.localUserId, 'SUBSCRIPTION_MANUAL_DELETE', 'subscription', subscriptionId, {
+        performedBy: 'platform_admin', manualOverride: true, companyId: current.company_id, status: current.status,
+      }, current.company_id);
+      this.db.run('DELETE FROM subscriptions WHERE id=?', [subscriptionId]);
+      return { id: subscriptionId, deleted: true };
+    })();
+  }
+
   ownSubscription(userId) {
     const caller = this.caller(userId);
     const subscription = this.db.get('SELECT * FROM subscriptions WHERE company_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1', [caller.localCompanyId]);
