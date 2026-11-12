@@ -1,6 +1,6 @@
 {
   "name": "blackstack-crm-v2",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "BlackStack CRM V2 - Full-stack CRM application",
   "main": "electron/main.js",
   "scripts": {
