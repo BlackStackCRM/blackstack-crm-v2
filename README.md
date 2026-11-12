@@ -1,5 +1,7 @@
 # BlackStack CRM V2
 
+BlackStack CRM V2 — production update releases.
+
 Full-stack CRM application built with Node.js, Express, SQLite, and Vanilla JavaScript.
 
 ## Architecture
