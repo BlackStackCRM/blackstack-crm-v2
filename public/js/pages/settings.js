@@ -6,6 +6,15 @@ window.PageModules.settings = {
   async init() {
     const main = document.getElementById('page-container');
     if (!main) return () => {};
+    const canManageSettings = this._canManageSettings();
+    let canUseDesktopUpdates = false;
+    if (window.desktop?.isDesktop) {
+      try {
+        const appInfo = await window.desktop.getAppInfo();
+        canUseDesktopUpdates = appInfo?.packaged === true;
+      } catch { /* Updates are unavailable if the installed app cannot report its state. */ }
+    }
+    this._desktopUpdatesAvailable = canUseDesktopUpdates;
     main.innerHTML = `
       <div class="mb-stack-lg">
         <h1 class="font-display text-h1 text-on-surface tracking-tight">Settings</h1>
@@ -16,8 +25,8 @@ window.PageModules.settings = {
         <div class="border-b border-outline-variant/30 flex items-center px-container-padding">
           ${this.tabBtn('account', 'Account', 'person')}
           ${this.tabBtn('appearance', 'Appearance', 'palette')}
-          ${this.tabBtn('system', 'System', 'settings')}
-          ${this.tabBtn('updates', 'Updates', 'update')}
+          ${canManageSettings ? this.tabBtn('system', 'System', 'settings') : ''}
+          ${canUseDesktopUpdates ? this.tabBtn('updates', 'Updates', 'update') : ''}
           ${this.tabBtn('datasafety', 'Data Safety', 'security')}
         </div>
         <div id="settings-body" class="p-container-padding"></div>
@@ -42,14 +51,18 @@ window.PageModules.settings = {
   async renderTab() {
     const body = document.getElementById('settings-body');
     const isCustomerTenant = window.RolePermissions?.role() === 'customer_tenant';
+    if (this.activeTab === 'system' && !this._canManageSettings()) {
+      this.activeTab = 'account';
+      return this.renderAccount(body);
+    }
+    if (this.activeTab === 'updates' && !this._desktopUpdatesAvailable) {
+      this.activeTab = 'account';
+      return this.renderAccount(body);
+    }
     if (this.activeTab === 'account') return this.renderAccount(body);
     if (this.activeTab === 'appearance') return this.renderAppearance(body);
-    // These sections are visible to customer tenants for a consistent Settings
-    // menu, but tenant-wide configuration and database safety controls remain
-    // administrator managed. Do not issue their protected API requests.
-    if (isCustomerTenant && this.activeTab === 'system') {
-      return this.renderManagedSection(body, 'System settings', 'System-wide configuration is managed by your administrator.');
-    }
+    // Tenant-wide database safety controls remain administrator managed. Do
+    // not issue their protected API requests for customer tenant accounts.
     if (isCustomerTenant && this.activeTab === 'datasafety') {
       return this.renderManagedSection(body, 'Data safety', 'Backups, storage, and data recovery are managed by your administrator.');
     }
@@ -257,8 +270,11 @@ window.PageModules.settings = {
   // Factory reset is an admin-tier action: the API enforces settings.manage,
   // so the button is only rendered for sessions that carry that permission.
   _canManageSettings() {
+    if (window.RolePermissions?.hasPermission) {
+      return window.RolePermissions.hasPermission('settings.manage');
+    }
     try {
-      const user = JSON.parse(localStorage.getItem('crm_user') || '{}');
+      const user = window.AuthAPI?.getUser?.() || JSON.parse(localStorage.getItem('crm_user') || '{}');
       const perms = Array.isArray(user.permissions) ? user.permissions : [];
       return perms.includes('*') || perms.includes('settings.manage');
     } catch { return false; }
@@ -267,7 +283,7 @@ window.PageModules.settings = {
   // ------------------ UPDATES TAB (desktop app only) ------------------
   async renderUpdates(container) {
     const isDesktop = !!(window.desktop && window.desktop.isDesktop);
-    const isCustomerTenant = window.RolePermissions?.role() === 'customer_tenant';
+    const canManageSettings = this._canManageSettings();
     let info = null;
     try { info = await window.desktop.getAppInfo(); } catch { /* fallback below */ }
 
@@ -280,7 +296,7 @@ window.PageModules.settings = {
         </div>
         <div class="pt-stack-md border-t border-outline-variant/30" id="channel-panel">
           <h3 class="font-h3 text-h3 text-on-surface mb-stack-sm">Update Channel</h3>
-          ${isCustomerTenant
+          ${!canManageSettings
             ? '<p class="font-body-sm text-body-sm text-on-surface-variant">Update channel is managed by your administrator.</p>'
             : `<div role="radiogroup" aria-label="Update channel" class="flex gap-stack-md mb-stack-md" id="channel-options">
                 <label class="flex items-center gap-2 font-body-md text-on-surface"><input type="radio" name="update-channel" value="stable"> Stable</label>
@@ -318,9 +334,9 @@ window.PageModules.settings = {
       statusEl.textContent = 'Updates are managed by the desktop application. You are using the web version.';
     }
 
-    // Channel selection is an administrator setting. Customer tenants can see
-    // the Updates section and status, but do not read or change that setting.
-    if (!isCustomerTenant) (async () => {
+    // Channel selection is protected by settings.manage. Other desktop users
+    // can check and install app updates without changing the shared channel.
+    if (canManageSettings) (async () => {
       try {
         // Routed through the shared API wrapper: every /api/datasafety route
         // requires authMiddleware + requirePermission('settings.manage'), and a
