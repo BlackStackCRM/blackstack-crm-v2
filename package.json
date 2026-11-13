@@ -1,6 +1,6 @@
 {
   "name": "blackstack-crm-v2",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "BlackStack CRM V2 - Full-stack CRM application",
   "main": "electron/main.js",
   "scripts": {
@@ -28,7 +28,8 @@
     "test:e2e": "node scripts/run-e2e-full.js",
     "test:e2e:ci": "node -e \"process.env.E2E_HEADLESS='true';require('./scripts/run-e2e-full.js')\"",
     "test:e2e:targeted": "node scripts/run-e2e-full.js --grep",
-    "electron:release:win": "node scripts/require-signing.js && electron-builder --win nsis --publish always -c.win.forceCodeSigning=true"
+    "electron:release:win": "node scripts/require-signing.js && electron-builder --win nsis --publish always \"-c.win.forceCodeSigning=true\"",
+    "electron:release:win:fix": "node scripts/release-win-fix.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
@@ -76,6 +77,7 @@
           ]
         }
       ],
+      "verifyUpdateCodeSignature": false,
       "icon": "electron/icons/icon.ico"
     },
     "nsis": {

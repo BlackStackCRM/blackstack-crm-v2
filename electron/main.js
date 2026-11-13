@@ -273,6 +273,10 @@ function setupAutoUpdate() {
     if (!app.isPackaged) { log('Dev mode — auto-update disabled'); return; }
     let autoUpdater;
     try { autoUpdater = require('electron-updater').autoUpdater; } catch (e) { log('electron-updater unavailable: ' + e.message); return; }
+    // Windows signature-verification policy is baked into resources/app-update.yml
+    // by electron-builder's win.verifyUpdateCodeSignature setting. In this
+    // electron-updater version, autoUpdater.verifyUpdateCodeSignature is a
+    // verifier function, not a boolean toggle; assigning false would be ignored.
     // Phase 3: channel preference (stable default; beta opts into prereleases).
     let channel = 'stable';
     try { channel = require(path.join(__dirname, '../server/services/updateService')).getChannel(); } catch { /* stable */ }
