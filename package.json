@@ -1,6 +1,6 @@
 {
   "name": "blackstack-crm-v2",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "description": "BlackStack CRM V2 - Full-stack CRM application",
   "main": "electron/main.js",
   "scripts": {
@@ -91,7 +91,8 @@
         "provider": "github",
         "owner": "BlackStackCRM",
         "repo": "blackstack-crm-v2",
-        "releaseType": "release"
+        "releaseType": "release",
+        "channel": "stable"
       }
     ]
   },
