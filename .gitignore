@@ -24,6 +24,7 @@ _token.txt
 
 # Phase 1: user data (never part of app package/updates)
 user-data/
+data/
 # Agent private state (plans, skills) - do not commit
 .hermes/
 

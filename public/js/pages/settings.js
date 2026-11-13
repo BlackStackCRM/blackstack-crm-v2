@@ -6,15 +6,6 @@ window.PageModules.settings = {
   async init() {
     const main = document.getElementById('page-container');
     if (!main) return () => {};
-    const canManageSettings = this._canManageSettings();
-    let canUseDesktopUpdates = false;
-    if (window.desktop?.isDesktop) {
-      try {
-        const appInfo = await window.desktop.getAppInfo();
-        canUseDesktopUpdates = appInfo?.packaged === true;
-      } catch { /* Updates are unavailable if the installed app cannot report its state. */ }
-    }
-    this._desktopUpdatesAvailable = canUseDesktopUpdates;
     main.innerHTML = `
       <div class="mb-stack-lg">
         <h1 class="font-display text-h1 text-on-surface tracking-tight">Settings</h1>
@@ -25,8 +16,8 @@ window.PageModules.settings = {
         <div class="border-b border-outline-variant/30 flex items-center px-container-padding">
           ${this.tabBtn('account', 'Account', 'person')}
           ${this.tabBtn('appearance', 'Appearance', 'palette')}
-          ${canManageSettings ? this.tabBtn('system', 'System', 'settings') : ''}
-          ${canUseDesktopUpdates ? this.tabBtn('updates', 'Updates', 'update') : ''}
+          ${this.tabBtn('system', 'System', 'settings')}
+          ${this.tabBtn('updates', 'Updates', 'update')}
           ${this.tabBtn('datasafety', 'Data Safety', 'security')}
         </div>
         <div id="settings-body" class="p-container-padding"></div>
@@ -50,34 +41,11 @@ window.PageModules.settings = {
 
   async renderTab() {
     const body = document.getElementById('settings-body');
-    const isCustomerTenant = window.RolePermissions?.role() === 'customer_tenant';
-    if (this.activeTab === 'system' && !this._canManageSettings()) {
-      this.activeTab = 'account';
-      return this.renderAccount(body);
-    }
-    if (this.activeTab === 'updates' && !this._desktopUpdatesAvailable) {
-      this.activeTab = 'account';
-      return this.renderAccount(body);
-    }
     if (this.activeTab === 'account') return this.renderAccount(body);
     if (this.activeTab === 'appearance') return this.renderAppearance(body);
-    // Tenant-wide database safety controls remain administrator managed. Do
-    // not issue their protected API requests for customer tenant accounts.
-    if (isCustomerTenant && this.activeTab === 'datasafety') {
-      return this.renderManagedSection(body, 'Data safety', 'Backups, storage, and data recovery are managed by your administrator.');
-    }
     if (this.activeTab === 'system') return this.renderSystem(body);
     if (this.activeTab === 'updates') return this.renderUpdates(body);
     if (this.activeTab === 'datasafety') return this.renderDataSafety(body);
-  },
-
-  renderManagedSection(container, title, message) {
-    container.innerHTML = `
-      <section class="max-w-2xl rounded-lg border border-outline-variant/40 bg-surface-container-low p-container-padding">
-        <h2 class="font-h3 text-h3 text-on-surface">${title}</h2>
-        <p class="mt-2 font-body-md text-on-surface-variant">${message}</p>
-      </section>
-    `;
   },
 
   renderAccount(container) {
@@ -196,7 +164,8 @@ window.PageModules.settings = {
       currentSettings = res || {};
     } catch { /* use defaults */ }
 
-    const selectedCurrency = currentSettings.defaultCurrency || 'USD';
+    const selectedCurrency = currentSettings.defaultCurrency || currentSettings.default_currency || 'USD';
+    const settingEnabled = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
     const currencyOpts = Currency.currencyOptions(selectedCurrency);
 
     container.innerHTML = `
@@ -219,9 +188,9 @@ window.PageModules.settings = {
         <div class="pt-stack-md border-t border-outline-variant/30">
           <h3 class="font-h3 text-h3 text-on-surface mb-stack-sm">Notifications</h3>
           <div class="space-y-stack-sm">
-            <label class="flex items-center gap-stack-sm cursor-pointer"><input type="checkbox" name="email_notifications" ${currentSettings.email_notifications ? 'checked' : ''} class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary"/><span class="font-body-md">Email notifications</span></label>
-            <label class="flex items-center gap-stack-sm cursor-pointer"><input type="checkbox" name="push_notifications" ${currentSettings.push_notifications ? 'checked' : ''} class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary"/><span class="font-body-md">Browser push notifications</span></label>
-            <label class="flex items-center gap-stack-sm cursor-pointer"><input type="checkbox" name="weekly_digest" ${currentSettings.weekly_digest ? 'checked' : ''} class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary"/><span class="font-body-md">Weekly digest</span></label>
+            <label class="flex items-center gap-stack-sm cursor-pointer"><input type="checkbox" name="email_notifications" ${settingEnabled(currentSettings.email_notifications) ? 'checked' : ''} class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary"/><span class="font-body-md">Email notifications</span></label>
+            <label class="flex items-center gap-stack-sm cursor-pointer"><input type="checkbox" name="push_notifications" ${settingEnabled(currentSettings.push_notifications) ? 'checked' : ''} class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary"/><span class="font-body-md">Browser push notifications</span></label>
+            <label class="flex items-center gap-stack-sm cursor-pointer"><input type="checkbox" name="weekly_digest" ${settingEnabled(currentSettings.weekly_digest) ? 'checked' : ''} class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary"/><span class="font-body-md">Weekly digest</span></label>
           </div>
         </div>
         <div class="pt-stack-md border-t border-outline-variant/30">
@@ -238,7 +207,7 @@ window.PageModules.settings = {
             <p class="font-body-sm text-body-sm text-on-surface-variant mb-stack-md">Deletes ALL business data — contacts, deals, leads, invoices, payments, accounting entries, tasks and activities. Your user account and login settings are kept. This cannot be undone.</p>
             <button type="button" id="reset-crm-data" class="bg-error text-white px-4 py-2 rounded-lg hover:bg-error/90 font-body-md font-medium">Reset CRM data…</button>
           </div>
-          ${this._canManageSettings() ? `
+          ${this._isPlatformOrAgency() ? `
           <div class="bg-error-container/20 border border-error/30 rounded-lg p-stack-md mt-stack-md">
             <p class="font-body-md text-on-surface font-medium mb-1">Factory data reset</p>
             <p class="font-body-sm text-body-sm text-on-surface-variant mb-stack-md">Wipes the ENTIRE database and returns the CRM to its original factory state — business data <strong>and all user accounts</strong> are deleted, then the bootstrap administrator is re-created. You and every other user will be signed out and must log in with the bootstrap admin credentials. This cannot be undone.</p>
@@ -256,7 +225,11 @@ window.PageModules.settings = {
     container.querySelector('#system-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
-        await API.put('/settings', Object.fromEntries(new FormData(e.target).entries()));
+        const settings = Object.fromEntries(new FormData(e.target).entries());
+        for (const name of ['email_notifications', 'push_notifications', 'weekly_digest']) {
+          settings[name] = e.target.elements[name].checked ? 'true' : 'false';
+        }
+        await API.put('/settings', settings);
         Toast.success('Settings saved');
       } catch (err) { Toast.error(err.message || 'Failed'); }
     });
@@ -267,8 +240,8 @@ window.PageModules.settings = {
     if (factoryBtn) factoryBtn.addEventListener('click', () => this.confirmFactoryReset());
   },
 
-  // Factory reset is an admin-tier action: the API enforces settings.manage,
-  // so the button is only rendered for sessions that carry that permission.
+  // Settings access is role/permission based; factory reset remains an
+  // administrator-only action even though customer tenants can manage settings.
   _canManageSettings() {
     if (window.RolePermissions?.hasPermission) {
       return window.RolePermissions.hasPermission('settings.manage');
@@ -280,10 +253,19 @@ window.PageModules.settings = {
     } catch { return false; }
   },
 
+  _isPlatformOrAgency() {
+    if (window.RolePermissions?.hasRole) return window.RolePermissions.hasRole('platform', 'agency');
+    try {
+      const user = window.AuthAPI?.getUser?.() || JSON.parse(localStorage.getItem('crm_user') || '{}');
+      const role = String(user.hierarchyRole || user.hierarchy_role || user.role || '').toLowerCase();
+      return ['platform', 'admin', 'agency', 'agency_admin'].includes(role);
+    } catch { return false; }
+  },
+
   // ------------------ UPDATES TAB (desktop app only) ------------------
   async renderUpdates(container) {
     const isDesktop = !!(window.desktop && window.desktop.isDesktop);
-    const canManageSettings = this._canManageSettings();
+    const canManageUpdateChannel = this._isPlatformOrAgency();
     let info = null;
     try { info = await window.desktop.getAppInfo(); } catch { /* fallback below */ }
 
@@ -296,7 +278,7 @@ window.PageModules.settings = {
         </div>
         <div class="pt-stack-md border-t border-outline-variant/30" id="channel-panel">
           <h3 class="font-h3 text-h3 text-on-surface mb-stack-sm">Update Channel</h3>
-          ${!canManageSettings
+          ${!canManageUpdateChannel
             ? '<p class="font-body-sm text-body-sm text-on-surface-variant">Update channel is managed by your administrator.</p>'
             : `<div role="radiogroup" aria-label="Update channel" class="flex gap-stack-md mb-stack-md" id="channel-options">
                 <label class="flex items-center gap-2 font-body-md text-on-surface"><input type="radio" name="update-channel" value="stable"> Stable</label>
@@ -334,12 +316,12 @@ window.PageModules.settings = {
       statusEl.textContent = 'Updates are managed by the desktop application. You are using the web version.';
     }
 
-    // Channel selection is protected by settings.manage. Other desktop users
-    // can check and install app updates without changing the shared channel.
-    if (canManageSettings) (async () => {
+    // Channel selection changes the shared updater configuration and remains
+    // administrator-only. Customer tenants can check and install updates.
+    if (canManageUpdateChannel) (async () => {
       try {
-        // Routed through the shared API wrapper: every /api/datasafety route
-        // requires authMiddleware + requirePermission('settings.manage'), and a
+        // Routed through the shared API wrapper: /api/datasafety routes
+        // require authentication and a Data Safety or administrator permission, and a
         // bare fetch() sends no Authorization header, so it was rejected with
         // 401 and the whole Updates tab silently fell back to defaults.
         // API.get() returns the unwrapped `data` object.
@@ -711,10 +693,12 @@ window.PageModules.settings = {
 
   // ─── PHASE 3: DATA SAFETY / STORAGE / SUPPORT PANEL ───────────────────
   async renderDataSafety(container) {
+    const isCustomerTenant = window.RolePermissions?.role() === 'customer_tenant';
     container.innerHTML = `
       <div class="space-y-stack-md max-w-2xl" id="datasafety-panel">
         <section aria-labelledby="ds-backup-h" class="pb-stack-md border-b border-outline-variant/30">
           <h3 id="ds-backup-h" class="font-h3 text-h3 text-on-surface mb-stack-sm">Backups</h3>
+          ${isCustomerTenant ? '<p class="font-body-sm text-body-sm text-on-surface-variant mb-stack-sm">You can create and review verified backups. Restore and whole-database maintenance or deletion remain administrator-only.</p>' : ''}
           <div id="ds-backup-status" class="font-body-md text-on-surface-variant mb-stack-md">Loading backup status…</div>
           <div class="flex gap-stack-sm">
             <button id="ds-create-backup" class="bg-secondary text-on-secondary px-4 py-2 rounded-lg hover:bg-secondary/90 font-body-md font-medium">Create Backup</button>
@@ -722,6 +706,7 @@ window.PageModules.settings = {
           </div>
           <div id="ds-backup-list" class="mt-stack-md space-y-stack-sm"></div>
         </section>
+        ${!isCustomerTenant ? `
         <section aria-labelledby="ds-storage-h" class="pb-stack-md border-b border-outline-variant/30">
           <h3 id="ds-storage-h" class="font-h3 text-h3 text-on-surface mb-stack-sm">Storage</h3>
           <div id="ds-storage" class="font-body-md text-on-surface-variant">Loading storage information…</div>
@@ -738,6 +723,7 @@ window.PageModules.settings = {
           <button id="ds-delete-all" class="border border-error text-error px-4 py-2 rounded-lg hover:bg-error-container/30 font-body-md">Delete All Data…</button>
           <div id="ds-delete-status" class="font-body-sm text-body-sm text-on-surface-variant mt-stack-sm"></div>
         </section>
+        ` : ''}
       </div>
     `;
 
@@ -759,7 +745,7 @@ window.PageModules.settings = {
         listEl.innerHTML = list.length ? list.map((b) => `
           <div class="flex items-center justify-between gap-stack-sm bg-surface-container-low rounded-lg px-3 py-2">
             <span class="font-body-sm text-body-sm text-on-surface truncate">${new Date(b.createdAt).toLocaleString()} · ${b.label || ''}</span>
-            <button class="ds-restore border border-outline-variant px-3 py-1 rounded-lg font-body-sm hover:bg-surface-container" data-file="${b.file}">Restore</button>
+            ${!isCustomerTenant ? `<button class="ds-restore border border-outline-variant px-3 py-1 rounded-lg font-body-sm hover:bg-surface-container" data-file="${b.file}">Restore</button>` : ''}
           </div>`).join('') : '<p class="font-body-sm text-on-surface-variant">No verified backups yet. Create one now.</p>';
         listEl.querySelectorAll('.ds-restore').forEach((btn) => {
           btn.addEventListener('click', () => this.restoreBackupFlow(btn.dataset.file, btn));
@@ -781,8 +767,8 @@ window.PageModules.settings = {
     });
     container.querySelector('#ds-refresh-backups').addEventListener('click', () => refreshBackups.call(this));
 
-    // Storage dashboard.
-    (async () => {
+    // Storage dashboard. Customer tenants only receive the backup panel.
+    if (!isCustomerTenant) (async () => {
       try {
         const s = (await window.API.get('/datasafety/storage')) || {};
         const rows = [
@@ -800,7 +786,7 @@ window.PageModules.settings = {
     })();
 
     // Support bundle.
-    container.querySelector('#ds-support-bundle').addEventListener('click', async (ev) => {
+    if (!isCustomerTenant) container.querySelector('#ds-support-bundle').addEventListener('click', async (ev) => {
       const btn = ev.currentTarget;
       const st = container.querySelector('#ds-support-status');
       btn.disabled = true; st.textContent = 'Preparing support bundle…';
@@ -812,7 +798,7 @@ window.PageModules.settings = {
     });
 
     // Delete-all-data flow (Phase 2 service; two confirmations + final backup).
-    container.querySelector('#ds-delete-all').addEventListener('click', () => this.deleteAllDataFlow(container));
+    if (!isCustomerTenant) container.querySelector('#ds-delete-all').addEventListener('click', () => this.deleteAllDataFlow(container));
 
     refreshBackups.call(this);
   },

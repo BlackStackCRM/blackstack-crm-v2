@@ -42,6 +42,7 @@ let server = null;
 let tmpDir = null;
 let adminToken = null;
 let managerToken = null;
+let customerToken = null;
 
 function portInUse(port) {
   return new Promise((resolve) => {
@@ -96,6 +97,17 @@ beforeAll(async () => {
         admin.password_hash, 'Route Test Manager', 'MANAGER', 'ACTIVE');
     db.exec("DELETE FROM user_roles WHERE user_id='rt_manager'");
     db.exec("INSERT INTO user_roles (user_id, role_id) VALUES ('rt_manager','role_manager')");
+    db.prepare(`INSERT OR REPLACE INTO users
+      (id, company_id, username, email, password_hash, full_name, role, status, hierarchy_role)
+      VALUES (?,?,?,?,?,?,?,?,?)`)
+      .run('rt_customer', 'default', 'rt_customer', 'rt_customer@blackstack.local',
+        admin.password_hash, 'Route Test Customer', 'CUSTOMER_ADMIN', 'ACTIVE', 'customer_tenant');
+    db.exec("DELETE FROM user_roles WHERE user_id='rt_customer'");
+    db.exec("INSERT INTO user_roles (user_id, role_id) VALUES ('rt_customer','role_customer_tenant')");
+    db.prepare(`INSERT OR REPLACE INTO subscriptions
+      (id, company_id, account_type, plan_name, amount_minor, duration_days, starts_at, expires_at, status, payment_status)
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now', '+30 days'), 'ACTIVE', 'PAID')`)
+      .run('rt_customer_active_sub', 'default', 'customer_tenant', 'Route Test Active', 0, 30);
     db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     db.close();
   }
@@ -123,10 +135,13 @@ beforeAll(async () => {
 
   const admin = await login('admin@blackstack.local', 'admin123');
   const manager = await login('rt_manager@blackstack.local', 'admin123');
+  const customer = await login('rt_customer@blackstack.local', 'admin123');
   expect(admin.status, `admin login failed: ${JSON.stringify(admin)}`).toBe(200);
   expect(manager.status, `manager login failed: ${JSON.stringify(manager)}`).toBe(200);
+  expect(customer.status, `customer login failed: ${JSON.stringify(customer)}`).toBe(200);
   adminToken = admin.token;
   managerToken = manager.token;
+  customerToken = customer.token;
 }, 120000);
 
 afterAll(async () => {
@@ -141,6 +156,7 @@ afterAll(async () => {
  * missing required parameter is correct behaviour, not a defect.
  */
 const UI_ROUTES = [
+  { method: 'GET', path: '/api/datasafety/backups', label: 'list backups' },
   { method: 'GET', path: '/api/datasafety/update-channel', label: 'read update channel' },
   { method: 'PUT', path: '/api/datasafety/update-channel', body: { channel: 'stable' }, label: 'write update channel' },
   { method: 'GET', path: '/api/datasafety/update-compatibility?target=2.0.0', label: 'schema compatibility' },
@@ -206,6 +222,41 @@ describe('PHASE B — update-channel behaviour', () => {
   test('PUT rejects a missing channel', async () => {
     const r = await call('PUT', '/api/datasafety/update-channel', adminToken, {});
     expect(r.status).toBe(400);
+  });
+});
+
+describe('customer tenant Settings and Data Safety permissions', () => {
+  test('customer tenant can view and save Settings', async () => {
+    expect((await call('GET', '/api/settings', customerToken)).status).toBe(200);
+    const saved = await call('PUT', '/api/settings', customerToken, {
+      company_name: 'Route Test Tenant',
+      email_notifications: 'true',
+    });
+    expect(saved.status, saved.text).toBe(200);
+  });
+
+  test('customer tenant can view backup metadata without server paths and create a backup', async () => {
+    const listed = await call('GET', '/api/datasafety/backups', customerToken);
+    expect(listed.status, listed.text).toBe(200);
+    expect(listed.json?.success).toBe(true);
+    for (const backup of listed.json.data) {
+      expect(backup).not.toHaveProperty('file');
+      expect(backup).not.toHaveProperty('source');
+    }
+
+    const created = await call('POST', '/api/datasafety/backups', customerToken);
+    expect(created.status, created.text).toBe(201);
+    expect(created.json?.data).not.toHaveProperty('file');
+    expect(created.json?.data).not.toHaveProperty('source');
+  });
+
+  test('customer tenant cannot change the shared update channel or run destructive data-safety actions', async () => {
+    expect((await call('GET', '/api/datasafety/update-channel', customerToken)).status).toBe(200);
+    expect((await call('PUT', '/api/datasafety/update-channel', customerToken, { channel: 'beta' })).status).toBe(403);
+    expect((await call('POST', '/api/datasafety/backups/restore', customerToken, { file: 'backup.sqlite' })).status).toBe(403);
+    expect((await call('POST', '/api/datasafety/backups/rotate', customerToken)).status).toBe(403);
+    expect((await call('POST', '/api/datasafety/data-deletion/token', customerToken)).status).toBe(403);
+    expect((await call('POST', '/api/datasafety/maintenance/vacuum', customerToken, { confirm: 'VACUUM' })).status).toBe(403);
   });
 });
 
@@ -289,6 +340,8 @@ describe('PHASE B — the module/static regression that caused Phase A', () => {
   test('the data-safety guard is still applied', () => {
     const src = fs.readFileSync(path.join(ROOT, 'server/routes/dataSafety.js'), 'utf8');
     expect(src).toContain("requirePermission('settings.manage')");
+    expect(src).toContain("requirePermission('data_safety.view')");
+    expect(src).toContain("requirePermission('data_safety.manage')");
     expect(src).toContain('authMiddleware');
     // Every route except the intentionally public /version must sit behind it.
     // Capture what ACTUALLY follows the path in each registration, rather than
@@ -302,7 +355,7 @@ describe('PHASE B — the module/static regression that caused Phase A', () => {
       .toBeGreaterThan(10);
 
     const unguarded = registrations
-      .filter((r) => !r.chain.includes('requireDataSafety'))
+      .filter((r) => !/(requireDataSafety|requireBackupManagement|requirePlatformAgencyDataSafety)/.test(r.chain))
       // /version is intentionally public: the updater reads it before login.
       .filter((r) => r.route !== '/version')
       .map((r) => r.route);

@@ -23,7 +23,10 @@ function requirePermission(permissionCode) {
 
     if (permissionCode.startsWith('users.') || permissionCode === 'settings.manage') {
       const caller = resolveCaller(getConn(), { userId: req.user.userId });
-      if (!caller || !['platform', 'agency'].includes(caller.role)) {
+      const allowedRoles = permissionCode === 'settings.manage'
+        ? ['platform', 'agency', 'customer_tenant']
+        : ['platform', 'agency'];
+      if (!caller || !allowedRoles.includes(caller.role)) {
         throw new AuthorizationError('This administrative feature is not available for your role');
       }
     }

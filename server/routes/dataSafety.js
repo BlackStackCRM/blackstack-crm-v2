@@ -1,12 +1,15 @@
 const express = require('express');
 const { getVersionInfo } = require('../version');
-const { listBackups, createBackup, verifyBackup, restoreBackup, rotateBackups, getBackupStatus, listBackupsVerified, safeRestoreBackup } = require('../services/backupService');
+const { createBackup, verifyBackup, restoreBackup, rotateBackups, getBackupStatus, listBackupsVerified, safeRestoreBackup } = require('../services/backupService');
 const { getStorageStatus } = require('../services/storageMonitor');
 const { issueDeleteToken, previewDeletion, performDeletion } = require('../services/dataDeletionService');
 const { generateSupportBundle } = require('../services/supportBundle');
 const { UpdateService, getChannel, setChannel, checkSchemaCompatibility, getCurrentDbSchemaVersion, CHANNELS } = require('../services/updateService');
 const { authMiddleware } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/rbac');
+const { AuthorizationError } = require('../utils/errors');
+const { getConn } = require('../utils/db');
+const { resolveCaller } = require('../services/rbac.service');
 
 const router = express.Router();
 
@@ -29,10 +32,23 @@ const router = express.Router();
 // updater before login) stays reachable. `/version` leaks only the app version,
 // which the client already displays.
 //
-// `settings.manage` is the same permission that guards
-// POST /api/settings/reset-crm-data, so this adds no new permission surface and
-// no new role is needed.
-const requireDataSafety = [authMiddleware, requirePermission('settings.manage')];
+const requireDataSafety = [authMiddleware, requirePermission('data_safety.view')];
+const requireBackupManagement = [authMiddleware, requirePermission('data_safety.manage')];
+const requirePlatformAgencyDataSafety = [
+  authMiddleware,
+  requirePermission('settings.manage'),
+  (req, res, next) => {
+    const caller = resolveCaller(getConn(), { userId: req.user.userId });
+    if (!caller || !['platform', 'agency'].includes(caller.role)) {
+      throw new AuthorizationError('This whole-database operation is administrator-only');
+    }
+    next();
+  },
+];
+
+function isCustomerTenant(req) {
+  return resolveCaller(getConn(), { userId: req.user.userId })?.role === 'customer_tenant';
+}
 
 /** Central application version — the single UI/updater-facing source. */
 router.get('/version', (req, res) => {
@@ -41,31 +57,42 @@ router.get('/version', (req, res) => {
 
 /** List existing verified backups (newest first). */
 router.get('/backups', requireDataSafety, (req, res) => {
-  res.json({ success: true, data: listBackups() });
+  const backups = listBackupsVerified();
+  // Customer tenants can see backup status but not server file paths or source
+  // database paths. They cannot restore these whole-database snapshots.
+  const data = isCustomerTenant(req)
+    ? backups.map(({ id, sizeBytes, createdAt, appVersion, label, verified }) => ({ id, sizeBytes, createdAt, appVersion, label, verified }))
+    : backups;
+  res.json({ success: true, data });
 });
 
 /** Manually create + verify a backup. */
-router.post('/backups', requireDataSafety, async (req, res) => {
+router.post('/backups', requireBackupManagement, async (req, res) => {
   try {
     const meta = createBackup({ label: 'manual' });
     const check = verifyBackup(meta.file);
     if (!check.valid) {
       return res.status(500).json({ success: false, error: { code: 'BACKUP_VERIFICATION_FAILED', message: check.errors.join('; ') } });
     }
-    res.status(201).json({ success: true, data: { ...meta, verified: true } });
+    const data = { ...meta, verified: true };
+    if (isCustomerTenant(req)) {
+      delete data.file;
+      delete data.source;
+    }
+    res.status(201).json({ success: true, data });
   } catch (err) {
     res.status(500).json({ success: false, error: { code: 'BACKUP_FAILED', message: err.message } });
   }
 });
 
 /** Verify a specific backup file. */
-router.get('/backups/verify', requireDataSafety, (req, res) => {
+router.get('/backups/verify', requirePlatformAgencyDataSafety, (req, res) => {
   const file = String(req.query.file || '');
   res.json({ success: true, data: verifyBackup(file) });
 });
 
 /** Emergency restore (explicit action only; never automatic). */
-router.post('/backups/restore', requireDataSafety, async (req, res) => {
+router.post('/backups/restore', requirePlatformAgencyDataSafety, async (req, res) => {
   try {
     const file = req.body && (req.body.file || req.body.backup_file);
     if (!file) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Backup file path required.' } });
@@ -84,7 +111,7 @@ router.get('/backups/status', requireDataSafety, (req, res) => {
 });
 
 /** Run retention rotation manually (safe; preserves newest recovery points). */
-router.post('/backups/rotate', requireDataSafety, (req, res) => {
+router.post('/backups/rotate', requirePlatformAgencyDataSafety, (req, res) => {
   res.json({ success: true, data: rotateBackups() });
 });
 
@@ -94,7 +121,7 @@ router.get('/storage', requireDataSafety, (req, res) => {
 });
 
 /** Database maintenance preview (§21): fragmentation estimate; no action. */
-router.get('/maintenance/vacuum/preview', requireDataSafety, (req, res) => {
+router.get('/maintenance/vacuum/preview', requirePlatformAgencyDataSafety, (req, res) => {
   try {
     const { getDatabasePath } = require('../config/userDataPath');
     const { DatabaseSync } = require('node:sqlite');
@@ -120,7 +147,7 @@ router.get('/maintenance/vacuum/preview', requireDataSafety, (req, res) => {
 });
 
 /** VACUUM with safety rails (§21): backup → vacuum → integrity + FK verify. */
-router.post('/maintenance/vacuum', requireDataSafety, (req, res) => {
+router.post('/maintenance/vacuum', requirePlatformAgencyDataSafety, (req, res) => {
   try {
     if (!req.body || req.body.confirm !== 'VACUUM') {
       return res.status(400).json({ success: false, error: { code: 'CONFIRMATION_REQUIRED', message: 'Send {"confirm":"VACUUM"} to run maintenance.' } });
@@ -154,17 +181,17 @@ router.post('/maintenance/vacuum', requireDataSafety, (req, res) => {
 });
 
 /** Deletion preview (step 1): scope + safety information. */
-router.get('/data-deletion/preview', requireDataSafety, (req, res) => {
+router.get('/data-deletion/preview', requirePlatformAgencyDataSafety, (req, res) => {
   res.json({ success: true, data: previewDeletion() });
 });
 
 /** Deletion step 2a: issue one-time token (requires typed confirmation below). */
-router.post('/data-deletion/token', requireDataSafety, (req, res) => {
+router.post('/data-deletion/token', requirePlatformAgencyDataSafety, (req, res) => {
   res.json({ success: true, data: issueDeleteToken() });
 });
 
 /** Deletion step 2b: execute (needs exact typed "DELETE" + valid token). */
-router.post('/data-deletion/execute', requireDataSafety, (req, res) => {
+router.post('/data-deletion/execute', requirePlatformAgencyDataSafety, (req, res) => {
   try {
     const { typedConfirmation, token } = req.body || {};
     const result = performDeletion({ typedConfirmation, token });
@@ -177,7 +204,7 @@ router.post('/data-deletion/execute', requireDataSafety, (req, res) => {
 });
 
 /** Support bundle (§23): manual generation only; sanitized; never auto-sent. */
-router.post('/support-bundle', requireDataSafety, async (req, res) => {
+router.post('/support-bundle', requirePlatformAgencyDataSafety, async (req, res) => {
   try {
     const result = await generateSupportBundle({});
     res.json({ success: true, data: result });
@@ -205,7 +232,7 @@ router.get('/update-channel', requireDataSafety, (req, res) => {
 });
 
 /** Set update channel (validates; persists to user preferences; no DB change). */
-router.put('/update-channel', requireDataSafety, (req, res) => {
+router.put('/update-channel', requirePlatformAgencyDataSafety, (req, res) => {
   try {
     const channel = String((req.body && req.body.channel) || '');
     const current = setChannel(channel);

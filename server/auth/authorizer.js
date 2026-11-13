@@ -14,7 +14,8 @@ const PERMISSIONS = new Set([
   'workflows.view', 'workflows.manage', 'workflows.execute',
   'reports.view', 'reports.export',
   'users.view', 'users.manage',
-  'settings.manage',
+  'settings.view', 'settings.manage',
+  'data_safety.view', 'data_safety.manage',
   'audit.view',
   'database.view',
   // Accounting & Finance (Steps 5-8)

@@ -9,7 +9,8 @@ class SettingsController {
     this.allowedKeys = new Set([
       'company_name', 'company_email', 'company_phone', 'company_address',
       'default_currency', 'tax_rate', 'invoice_prefix', 'invoice_terms',
-      'timezone', 'date_format', 'locale'
+      'timezone', 'date_format', 'locale',
+      'email_notifications', 'push_notifications', 'weekly_digest'
     ]);
   }
 
