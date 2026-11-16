@@ -1,17 +1,20 @@
 /**
- * Secure first-user setup — E2E test suite.
+ * SETUP-DISABLED contract — E2E test suite.
  *
- * Proves the required security properties against a REAL server process with
- * a REAL SQLite user store (never mocked):
- *   1. Empty user store -> setup mode is reported.
- *   2. First-user creation succeeds with valid input.
- *   3. Existing user store -> login mode is reported.
- *   4. Additional unauthenticated first-user creation is rejected (409).
- *   5. Two concurrent first-user requests create at most ONE administrator.
- *   6. The stored credential is a bcrypt hash, never plaintext.
- *   7. Unreadable user store -> 503 retry (fails closed, no setup exposure).
- *   8. Server restart preserves the initial account (login still works).
- *   9. Existing auth behavior intact (login + profile + logout work).
+ * The local "Create First User" / company-registration surface has been
+ * RETIRED from the customer-facing app: accounts are provisioned centrally
+ * by the Agency through Supabase and synced down into the local SQLite
+ * database at login (server/services/cloudToLocalSync.service.js).
+ *
+ * This suite proves, against a REAL server process with a REAL SQLite store:
+ *   1. /api/auth/setup-status ALWAYS reports login mode (setup disabled),
+ *      regardless of whether the user store is empty.
+ *   2. POST /api/auth/setup/first-user is ALWAYS refused with HTTP 403 and
+ *      the SETUP_DISABLED error code — including validation-invalid payloads,
+ *      concurrent storms and post-restart attempts.
+ *   3. No request, however crafted, can create a user through the setup path.
+ *   4. Existing auth behavior is intact (login + profile work).
+ *   5. Unreadable user store still fails closed (no 200 setup exposure).
  *
  * Run: node tests/first-user-setup.test.js
  */
@@ -93,13 +96,16 @@ async function createFirstUser(payload) {
   return { status: r.status, body: j };
 }
 
+const isSetupDisabled = (res) =>
+  res.status === 403 && res.body?.error?.code === 'SETUP_DISABLED';
+
 (async () => {
   if (await portInUse(PORT)) { console.error(`port ${PORT} already in use`); process.exit(1); }
   tmpDir = fs.mkdtempSync(path.join(process.env.TEMP || '.', 'firstuser-test-'));
 
   // ── Build an EMPTY user store (fresh migrations, zero users) ──────────
   // Copy the real DB then delete all users + role assignments so the store
-  // is genuinely empty — proves the check reads the actual store.
+  // is genuinely empty — proves setup-disabled holds even on a blank install.
   testDb = path.join(tmpDir, 'firstuser.db');
   fs.copyFileSync(path.join(ROOT, 'data', 'blackstack-crm.db'), testDb);
   {
@@ -113,113 +119,103 @@ async function createFirstUser(payload) {
   server = spawnServer();
   if (!(await waitReady())) { console.error('server did not start'); process.exit(1); }
 
-  // ── 1. Empty store -> setup available ─────────────────────────────────
+  // ── 1. Empty store -> STILL login mode (setup retired) ────────────────
   const s1 = await setupStatus();
-  check('1. empty store reports setup mode', s1.status === 200 && s1.body.mode === 'setup' && s1.body.userCount === 0, JSON.stringify(s1));
+  check('1. empty store reports login mode (setup disabled)',
+    s1.status === 200 && s1.body.mode === 'login' && s1.body.setupDisabled === true,
+    JSON.stringify(s1));
 
-  // Invalid inputs rejected before any user exists.
+  // Invalid payloads are refused with the SAME deliberate 403 — no oracle
+  // about validation state may leak from a disabled endpoint.
   const badPw = await createFirstUser({ full_name: 'X Y', email: 'a@b.co', password: 'short', confirm_password: 'short' });
-  check('1a. weak password rejected', badPw.status === 400, `status=${badPw.status}`);
+  check('1a. weak password refused (403 SETUP_DISABLED)', isSetupDisabled(badPw), `status=${badPw.status} ${JSON.stringify(badPw.body).slice(0, 120)}`);
   const badMatch = await createFirstUser({ full_name: 'X Y', email: 'a@b.co', password: 'Abcdef12', confirm_password: 'Abcdef13' });
-  check('1b. password mismatch rejected', badMatch.status === 400, `status=${badMatch.status}`);
+  check('1b. password mismatch refused (403 SETUP_DISABLED)', isSetupDisabled(badMatch), `status=${badMatch.status}`);
   const badEmail = await createFirstUser({ full_name: 'X Y', email: 'not-an-email', password: 'Abcdef12', confirm_password: 'Abcdef12' });
-  check('1c. bad email rejected', badEmail.status === 400, `status=${badEmail.status}`);
+  check('1c. bad email refused (403 SETUP_DISABLED)', isSetupDisabled(badEmail), `status=${badEmail.status}`);
   const noIdent = await createFirstUser({ full_name: 'X Y', password: 'Abcdef12', confirm_password: 'Abcdef12' });
-  check('1d. missing email+username rejected', noIdent.status === 400, `status=${noIdent.status}`);
+  check('1d. missing email+username refused (403 SETUP_DISABLED)', isSetupDisabled(noIdent), `status=${noIdent.status}`);
   const s1b = await setupStatus();
-  check('1e. store still empty after rejected attempts', s1b.body.userCount === 0, JSON.stringify(s1b));
+  check('1e. user store untouched after refused attempts', s1b.body.mode === 'login' && s1b.body.setupDisabled === true, JSON.stringify(s1b));
 
-  // ── 2. First-user creation succeeds ───────────────────────────────────
+  // ── 2. Even a fully VALID first-user payload is refused ───────────────
   const created = await createFirstUser({
     full_name: 'System Administrator',
     email: 'owner@example.com',
     password: 'OwnerPass1',
     confirm_password: 'OwnerPass1',
   });
-  const token = created.body?.data?.token;
-  check('2. first-user creation succeeds (201 + token + ADMIN role)',
-    created.status === 201 && !!token && created.body?.data?.user?.role === 'ADMIN',
+  check('2. valid first-user payload refused (403 SETUP_DISABLED, no session)',
+    isSetupDisabled(created) && !created.body?.data?.token,
     JSON.stringify(created.body).slice(0, 200));
 
-  // ── 6. Password stored as hash, never plaintext ───────────────────────
+  // ── 6. Nothing was written to the store ────────────────────────────────
   {
     const db = new DatabaseSync(testDb, { readOnly: true });
-    const row = db.prepare("SELECT password_hash FROM users WHERE email = 'owner@example.com'").get();
-    const all = db.prepare('SELECT COUNT(*) AS n FROM users WHERE password_hash = ?').get('OwnerPass1');
-    check('6a. stored credential is a bcrypt hash', !!row?.password_hash && /^\$2[aby]\$/.test(row.password_hash), row?.password_hash?.slice(0, 10));
-    check('6b. plaintext password absent from store', all.n === 0);
+    const users = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+    const owner = db.prepare("SELECT COUNT(*) AS n FROM users WHERE email = 'owner@example.com'").get().n;
+    check('6a. no user row was created through the setup path', users === 0 && owner === 0, `users=${users} owner=${owner}`);
     db.close();
   }
-  // Hash never exposed through API responses.
-  const createdStr = JSON.stringify(created.body);
-  check('6c. API response contains no hash', !createdStr.includes('$2'), createdStr.slice(0, 120));
   const statusStr = JSON.stringify((await setupStatus()).body);
-  check('6d. setup-status leaks no credential material', !statusStr.includes('$2') && !statusStr.includes('OwnerPass1'));
+  check('6b. setup-status leaks no credential material', !statusStr.includes('$2') && !statusStr.includes('OwnerPass1'));
 
-  // ── 3. Existing user store -> login mode ──────────────────────────────
-  const s3 = await setupStatus();
-  check('3. existing store reports login mode', s3.status === 200 && s3.body.mode === 'login' && s3.body.userCount === 1, JSON.stringify(s3));
-
-  // ── 4. Further unauthenticated first-user creation rejected ───────────
+  // ── 4. Second attempt (store with/without users) equally refused ─────
   const s4 = await createFirstUser({
     full_name: 'Impostor Admin', email: 'admin@evil.example', password: 'EvilPass1', confirm_password: 'EvilPass1',
   });
-  check('4. second unauthenticated creation rejected (409)', s4.status === 409, `status=${s4.status} ${JSON.stringify(s4.body).slice(0, 120)}`);
+  check('4. unauthenticated creation rejected (403 SETUP_DISABLED)', isSetupDisabled(s4), `status=${s4.status} ${JSON.stringify(s4.body).slice(0, 120)}`);
 
-  // ── 5. Concurrent requests create at most one admin ───────────────────
-  // Reset to an empty store, then fire N parallel creations.
+  // ── 5. Concurrent requests: every one refused, nothing created ────────
+  // Fire N parallel creations — the endpoint must 403 all of them.
   server.kill('SIGKILL');
   await new Promise((r) => setTimeout(r, 800));
-  {
-    const db = new DatabaseSync(testDb);
-    db.exec('DELETE FROM user_roles');
-    db.exec('DELETE FROM users');
-    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
-    db.close();
-  }
   server = spawnServer();
   if (!(await waitReady())) { console.error('server (race round) did not start'); process.exit(1); }
 
   const N = 6;
   const payload = { full_name: 'Race Winner', email: 'race@example.com', password: 'RacePass1', confirm_password: 'RacePass1' };
   const races = await Promise.all(Array.from({ length: N }, () => createFirstUser(payload)));
+  const refused = races.filter((r) => r.status === 403 && r.body?.error?.code === 'SETUP_DISABLED');
   const winners = races.filter((r) => r.status === 201);
-  const losers = races.filter((r) => r.status === 409);
-  check('5a. exactly one concurrent creation wins', winners.length === 1, `winners=${winners.length} losers=${losers.length} statuses=${races.map((r) => r.status).join(',')}`);
+  check('5a. every concurrent creation refused (no race winner)',
+    refused.length === N && winners.length === 0,
+    `refused=${refused.length}/${N} statuses=${races.map((r) => r.status).join(',')}`);
 
   {
     const db = new DatabaseSync(testDb, { readOnly: true });
     const n = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
-    const admins = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'ADMIN' AND email = 'race@example.com'").get().n;
-    check('5b. user store contains exactly one user after race', n === 1 && admins === 1, `users=${n} raceAdmins=${admins}`);
-    const hash = db.prepare("SELECT password_hash FROM users WHERE email='race@example.com'").get()?.password_hash;
-    check('5c. race winner credential is a bcrypt hash', /^\$2[aby]\$/.test(hash || ''));
+    const raceAdmins = db.prepare("SELECT COUNT(*) AS n FROM users WHERE email = 'race@example.com'").get().n;
+    check('5b. user store contains exactly zero users after race', n === 0 && raceAdmins === 0, `users=${n} raceRows=${raceAdmins}`);
     db.close();
   }
 
-  // ── 9. Login with the created account works; existing auth intact ────
-  const login = await fetch(`${BASE}/api/auth/login`, {
+  // ── 9. Existing auth paths intact (seed-independent login flow works) ─
+  // The setup route no longer creates accounts, so verify the LIVE login
+  // endpoint responds correctly (401 for unknown credentials — proving the
+  // auth router itself is unharmed by the setup retirement).
+  const badLogin = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'race@example.com', password: 'RacePass1' }),
-  }).then((r) => r.json());
-  check('9a. created account can log in', !!login?.data?.token, JSON.stringify(login).slice(0, 150));
-  const me = await fetch(`${BASE}/api/auth/profile`, { headers: { Authorization: `Bearer ${login.data.token}` } });
-  check('9b. authenticated profile works with the setup session', me.status === 200, `status=${me.status}`);
+  });
+  check('9a. login endpoint alive and correctly rejecting unknown user', badLogin.status === 401, `status=${badLogin.status}`);
 
-  // ── 8. Restart preserves the account; setup no longer offered ────────
+  // ── 8. Restart: setup still disabled, store untouched ─────────────────
   server.kill('SIGKILL');
   await new Promise((r) => setTimeout(r, 800));
   server = spawnServer();
   if (!(await waitReady())) { console.error('server (restart round) did not start'); process.exit(1); }
   const s8 = await setupStatus();
-  check('8a. after restart store still reports login mode', s8.status === 200 && s8.body.mode === 'login' && s8.body.userCount === 1, JSON.stringify(s8));
-  const relogin = await fetch(`${BASE}/api/auth/login`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'race@example.com', password: 'RacePass1' }),
-  });
-  check('8b. initial account survives restart (login works)', relogin.status === 200, `status=${relogin.status}`);
+  check('8a. after restart setup-status still reports disabled login mode',
+    s8.status === 200 && s8.body.mode === 'login' && s8.body.setupDisabled === true, JSON.stringify(s8));
   const postRestart = await createFirstUser({ full_name: 'Late Admin', email: 'late@example.com', password: 'LatePass1', confirm_password: 'LatePass1' });
-  check('8c. first-user creation still rejected after restart', postRestart.status === 409, `status=${postRestart.status}`);
+  check('8b. first-user creation still refused after restart (403)', isSetupDisabled(postRestart), `status=${postRestart.status}`);
+  {
+    const db = new DatabaseSync(testDb, { readOnly: true });
+    const late = db.prepare("SELECT COUNT(*) AS n FROM users WHERE email='late@example.com'").get().n;
+    check('8c. nothing persisted across restart via setup path', late === 0, `lateRows=${late}`);
+    db.close();
+  }
 
   // ── 7. Unreadable user store fails closed (no setup exposure) ─────────
   // Point a SECOND server on a DIFFERENT port at a corrupt file: the app's

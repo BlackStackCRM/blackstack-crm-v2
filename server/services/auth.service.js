@@ -19,6 +19,18 @@ class AuthService {
       throw new AuthenticationError('Email/username and password are required.');
     }
 
+    // ── Cloud → Local sync (pre-verification pull) ──────────────────────────
+    // On a fresh customer install the local database is empty; the account was
+    // created by the Agency in Supabase. Before verifying credentials locally,
+    // attempt to mirror the user's company/agency/user rows down. Failure is
+    // non-fatal: an offline login still works against local data.
+    try {
+      const { syncUserCompanyFromCloud } = require('./cloudToLocalSync.service');
+      await syncUserCompanyFromCloud(this.conn, { email: identifier }, console);
+    } catch (e) {
+      console.warn('[auth] cloud->local sync skipped:', e.message);
+    }
+
     const user = await this.userRepo.findByIdentifier(identifier);
 
     if (!user) throw new AuthenticationError('Invalid credentials.');

@@ -14,6 +14,65 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
+
+// ── FIRST-LAUNCH CONFIGURATION BOOTSTRAP ────────────────────────────────────
+//
+// Fresh Windows installs previously crashed with "BlackStack CRM configuration
+// required" because the shared-env pointer (shared-env-path.txt in the Electron
+// user-data folder) did not exist, and no fallback .env could be resolved.
+//
+// On every launch — BEFORE resolveSharedEnvPath() runs — we check for the
+// pointer. When it is missing we provision a complete local runtime under
+// %APPDATA%\blackstack-crm-v2\data\: a default .env (PORT 3000, fresh JWT
+// secret, DB_PATH inside that folder) and the empty SQLite database the server
+// migrations will initialize. The pointer file is then written so every later
+// launch (and the web server, if one is ever pointed at this install) resolves
+// the exact same environment.
+function ensureLocalRuntimeConfig(userDataDir, log) {
+  const pointerFile = path.join(userDataDir, 'shared-env-path.txt');
+  if (fs.existsSync(pointerFile)) return; // already configured — nothing to do
+
+  // Data folder. Keep the historical name so upgrades from early builds that
+  // manually created %APPDATA%\blackstack-crm-v2\data keep their database.
+  const dataDir = path.join(app.getPath('appData'), 'blackstack-crm-v2', 'data');
+  fs.mkdirSync(dataDir, { recursive: true });
+
+  const envPath = path.join(dataDir, '.env');
+  const dbPath = path.join(dataDir, 'blackstack-crm.db');
+
+  if (!fs.existsSync(envPath)) {
+    const jwtSecret = crypto.randomBytes(32).toString('hex');
+    const supabaseUrl = process.env.SUPABASE_URL || '';
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    const env = [
+      'NODE_ENV=production',
+      'PORT=3000',
+      `DB_PATH=${dbPath.replace(/\\/g, '/')}`,
+      `JWT_SECRET=${jwtSecret}`,
+      'JWT_EXPIRY=7d',
+      'CORS_ORIGIN=*',
+      'RATE_LIMIT_WINDOW_MS=900000',
+      'RATE_LIMIT_MAX_REQUESTS=100',
+      'DEMO_MODE=false',
+      '',
+      '# Supabase Cloud Sync (injected at build time; empty values are harmless)',
+      `SUPABASE_URL=${supabaseUrl}`,
+      `SUPABASE_SERVICE_ROLE_KEY=${supabaseKey}`,
+      '',
+    ].join('\n');
+    fs.writeFileSync(envPath, env, { encoding: 'utf8' });
+    log('Generated default environment file: ' + envPath);
+  }
+
+  // The SQLite file itself is intentionally NOT created here: the server's
+  // migration runner owns schema creation and runs automatically at startup.
+  // Creating an empty file here would defeat safeMigrationRunner's
+  // "empty file = fresh install" detection and trigger a pointless backup.
+
+  fs.writeFileSync(pointerFile, envPath + '\n', { encoding: 'utf8' });
+  log('Wrote shared environment pointer: ' + pointerFile + ' -> ' + envPath);
+}
 
 // ── Single instance ─────────────────────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock();
@@ -52,6 +111,13 @@ function bootstrap() {
   }
   global.__crmLog = log;
   log('userData dir: ' + userDataDir + (override && userDataDir === path.resolve(override) ? ' (BLACKSTACK_USER_DATA_DIR override)' : ' (default)'));
+
+  // First-launch provisioning: create %APPDATA%\blackstack-crm-v2\data\.env
+  // and the shared-env-path.txt pointer when neither exists yet. Must run
+  // BEFORE resolveSharedEnvPath() so a fresh install never hits the fatal
+  // "configuration required" branch below.
+  try { ensureLocalRuntimeConfig(userDataDir, log); }
+  catch (e) { log('Config bootstrap warning: ' + e.message); }
 
   // Both the web server and Electron must load the same external environment
   // file. In packaged installs, the prior safe-migration marker identifies the

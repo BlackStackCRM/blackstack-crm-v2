@@ -1,8 +1,8 @@
 const express = require('express');
-const { body, validationResult } = require('express-validator');
+const { validationResult } = require('express-validator');
 const { AuthController } = require('../controllers/auth.controller');
 const { authMiddleware } = require('../middleware/auth');
-const { errorResponse } = require('../utils/response');
+const { errorResponse, successResponse } = require('../utils/response');
 const { loginValidation, changePasswordValidation } = require('../validators/auth.validator');
 
 const router = express.Router();
@@ -24,22 +24,29 @@ router.get('/me', authMiddleware, controller.getProfile.bind(controller));
 router.put('/profile', authMiddleware, controller.updateProfile.bind(controller));
 router.put('/profile/password', authMiddleware, changePasswordValidation, handleValidation, controller.changePassword.bind(controller));
 
-// SETUP STATUS (public) — login.js probes this BEFORE showing the login
-// form. A 404 here disabled the login form entirely (showStoreError).
-// Returns { mode: 'setup'|'login', userCount } — read-only, no user data.
-router.get('/setup-status', controller.setupStatus.bind(controller));
+// SETUP/REGISTRATION ENDPOINTS RETIRED (customer-facing).
+//
+// Customer accounts are provisioned centrally by the Agency through Supabase;
+// after a Supabase-authenticated login the account and its company are synced
+// down into the local SQLite database automatically. A customer must never be
+// able to create the first user, register a company or activate a licence on
+// their own machine, so these endpoints are disabled at the router:
+//
+//   GET  /api/auth/setup-status        -> always mode 'login'
+//   POST /api/auth/setup/first-user    -> 403 SETUP_DISABLED
+//
+// The setup-status probe stays (login.js polls it on page load; a 404 would
+// disable the login form entirely), but it now reports that the login screen
+// is always the entry point.
+router.get('/setup-status', (req, res) => {
+  res.json(successResponse({ mode: 'login', userCount: -1, setupDisabled: true }));
+});
 
-// CREATE FIRST USER (public) — 409 once any user exists. Returns a session
-// so the operator lands on the dashboard immediately after setup.
-router.post('/setup/first-user',
-  [
-    body('full_name').isString().trim().notEmpty().withMessage('Full name is required.'),
-    body('email').isString().trim().notEmpty().withMessage('A valid email address is required.'),
-    body('password').isString().isLength({ min: 8 }).withMessage('Password must be at least 8 characters.'),
-    body('confirm_password').custom((value, { req }) => value === req.body.password)
-      .withMessage('Passwords do not match.'),
-  ],
-  handleValidation,
-  controller.createFirstUser.bind(controller));
+router.post('/setup/first-user', (req, res) => {
+  res.status(403).json(errorResponse(
+    'SETUP_DISABLED',
+    'Local account registration is disabled. Your account is created by the Agency — please sign in with the credentials you were provided.'
+  ));
+});
 
 module.exports = router;
