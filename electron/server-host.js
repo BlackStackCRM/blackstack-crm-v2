@@ -49,15 +49,42 @@ async function startServer({ log = console.log } = {}) {
   const appModule = require(path.join(__dirname, '../server/app'));
   log('CRM server module loaded (desktop binding 127.0.0.1, port ' + port + ')');
 
-  return {
+  // Phase D: expose the server handle globally so the auto-updater can close
+  // the Express HTTP server and SQLite BEFORE quitAndInstall(). stop() MUST use
+  // httpServer.close() (graceful), NOT process.kill() — the latter would kill
+  // the entire Electron main process before quitAndInstall() can complete.
+  const serverHandle = {
     app: appModule,
     port,
-    async stop() {
+    stop: async () => {
       // Graceful shutdown handled by app.js SIGTERM handler (closes http.Server
       // then SQLite). Runs only at app exit.
-      try { process.kill(process.pid, 'SIGTERM'); } catch { /* noop */ }
+      // NOTE: server/app.js exports getHttpServer(); we call close() directly
+      // instead of process.kill() to avoid killing the Electron main process.
+      const { getHttpServer } = require(path.join(__dirname, '../server/app'));
+      const httpServer = getHttpServer();
+      if (httpServer && typeof httpServer.close === 'function') {
+        await new Promise((resolve, reject) => {
+          const onClose = () => { try { resolve(); } catch { resolve(); } };
+          const onTimeout = () => { try { resolve(); } catch { resolve(); } };
+          httpServer.close(onClose);
+          // Force-fire the close after a grace period so the app doesn't hang.
+          // The app's shutdown() also has a 10s timeout that process.exit()s if
+          // the close doesn't complete, which is acceptable as a belt-and-braces.
+          setTimeout(() => {
+            try { httpServer.close(() => {}); } catch { /* already closed */ }
+            resolve();
+          }, 5000).unref();
+        });
+        log('CRM HTTP server closed for update install');
+      } else {
+        log('WARNING: no httpServer available for graceful close before update install');
+      }
     },
   };
+  global.__serverHandle = serverHandle;
+
+  return serverHandle;
 }
 
 module.exports = { startServer, DESKTOP_PORT_FALLBACKS };

@@ -243,7 +243,7 @@ function bootstrap() {
   }
 
   // ── Auto-update (electron-updater, background only) ───────────────────────
-  //
+  // ...
   // Phase C changes, all additive:
   //   * lifecycle state moved into server/services/updateState.js (persisted, not
   //     an in-memory global) so a downloaded update survives a restart;
@@ -696,9 +696,41 @@ function setupAutoUpdate() {
           + 'BlackStack has not been changed.',
       };
     }
-    // 4. Clean shutdown before the installer takes over. The existing
-    //    window-all-closed / before-quit handlers stop the server and close the
-    //    database connection; quitAndInstall performs the quit.
+    // 4. CRITICAL FIX: gracefully close the in-process Express server and SQLite
+    //    connection BEFORE calling quitAndInstall(). The server-host module exposes
+    //    a stop() handle; app.js's graceful shutdown (SIGTERM) closes the HTTP
+    //    server then the SQLite connection. Releasing these handles is what lets
+    //    the NSIS installer overwrite the application files on the next restart.
+    try {
+      const { startServer } = require('./server-host');
+      if (global.__serverHandle && typeof global.__serverHandle.stop === 'function') {
+        await global.__serverHandle.stop();
+        log('CRM server stopped for update install');
+      } else {
+        log('WARNING: no server handle available for graceful stop before update install');
+      }
+    } catch (err) {
+      log('Failed to stop server before update install: ' + err.message);
+    }
+
+    try {
+      const { _closeCachedConnection } = require('../server/utils/db');
+      if (_closeCachedConnection) {
+        _closeCachedConnection();
+        log('SQLite connection closed before update install');
+      }
+    } catch (err) {
+      log('Failed to close SQLite connection before update install: ' + err.message);
+    }
+
+    // 5. Give Windows a short window to release file locks before the installer
+    //    takes over and asks the OS to quit this process.
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // 6. Start the install state + UI, then trigger the native installer.
+    //    QUIT_AND_INSTALL: do-not-run-silent-args=true, restart-app-after=true.
+    //    `before-quit-for-update` is emitted by electron-updater synchronously
+    //    inside this shutdown, before the quit sequence begins.
     try {
       U.setState('INSTALLING', {}, { force: true });
       require('./ipc').sendToRenderer('update-status', { status: 'INSTALLING' });
@@ -707,11 +739,15 @@ function setupAutoUpdate() {
     // Belt-and-braces: set the flag ourselves too, in case the
     // 'before-quit-for-update' event is not emitted before our before-quit runs.
     global.__setQuittingForUpdate();
+    if (!au) {
+      updateLogger.event(updateLogger.EVENTS.INSTALL_FAILED, { phase: 'missing-updater' });
+      return { ok: false, message: 'Updater not available.' };
+    }
     au.quitAndInstall(false, true); // don't run silent installer args; restart app after
-    // TASK 3: force-exit fallback. quitAndInstall can hang if Windows is slow to
-    // release the lock on the downloaded installer (or if AV scans it for a long
-    // time). The installer process, once spawned, survives app.exit(), so this
-    // only fires when the quit genuinely stalled and the installer never started.
+    // 7. force-exit fallback. quitAndInstall can hang if Windows is slow to
+    //    release the lock on the downloaded installer (or if AV scans it for a long
+    //    time). The installer process, once spawned, survives app.exit(), so this
+    //    only fires when the quit genuinely stalled and the installer never started.
     setTimeout(() => {
       log('Update install did not complete within 10s — forcing exit');
       updateLogger.event('install-force-exit', { from: APP_VERSION });

@@ -347,6 +347,9 @@ function listenOnce(port, host) {
   return new Promise((resolve, reject) => {
     const srv = host ? app.listen(port, host, () => resolve(srv)) : app.listen(port, () => resolve(srv));
     srv.on('error', reject);
+    // Phase D: expose the http.Server instance so the auto-updater can close it
+    // gracefully before quitAndInstall() (avoiding file locks).
+    setHttpServer(srv);
   });
 }
 
@@ -434,4 +437,9 @@ async function shutdown(signal) {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-module.exports = app;
+// Exported for consumers (e.g. electron/server-host.js) that need the raw
+// http.Server instance. The graceful shutdown (SIGTERM/SIGINT) is in the
+// shutdown() function below.
+let _httpServer = null;
+function getHttpServer() { return _httpServer; }
+function setHttpServer(srv) { _httpServer = srv; }
