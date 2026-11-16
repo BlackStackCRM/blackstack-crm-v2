@@ -425,6 +425,21 @@ function setupAutoUpdate() {
       return next;
     };
 
+    // ── TASK: stale-state + stale-cache cleanup at startup ────────────────
+    // The app is RUNNING, so a persisted INSTALLING/RESTARTING state can only
+    // be a leftover from a previous session (e.g. a failed install). Reset it
+    // to IDLE and wipe the updater cache so a stale staged installer can never
+    // trigger a fake "Installing" state in the UI.
+    try {
+      const stale = U.readState();
+      if (stale.status === U.STATES.INSTALLING || stale.status === U.STATES.RESTARTING) {
+        log(`Stale persisted update state "${stale.status}" (app is running) — resetting to IDLE`);
+        updateLogger.event('stale-update-state-reset', { from: stale.status, version: stale.targetVersion });
+        U.setState('IDLE', { percent: null, error: null }, { force: true });
+        clearUpdaterCache('stale-installing-state');
+      }
+    } catch (e) { log('Stale update-state cleanup skipped: ' + e.message); }
+
     // Restore any update that was already downloaded before this launch. The
     // updater's own package cache survives, so there is nothing to re-download —
     // the user just needs to be told it is waiting.
@@ -483,6 +498,10 @@ function setupAutoUpdate() {
 
     autoUpdater.on('update-not-available', () => {
       log('No update available');
+      // TASK: the app is on the latest version, so any staged installer in the
+      // updater cache is by definition stale — remove it so it can never fire a
+      // bogus "Installing" state or a phantom "Restart & Update" later.
+      clearUpdaterCache('up-to-date');
       emit('UP_TO_DATE', { currentVersion: APP_VERSION, percent: null });
     });
 

@@ -434,6 +434,10 @@ window.PageModules.settings = {
       latest = { ...(latest || {}), ...s };
       const state = latest;
 
+      // TASK: INSTALLING must never become a permanent trap. If the state leaves
+      // INSTALLING for any reason, disarm the watchdog immediately.
+      if (state.status !== 'INSTALLING') this._clearInstallStallTimer();
+
       // A background download always leaves the background note visible.
       if (state.status === 'DOWNLOADING') renderProgress(state);
       else clearProgress();
@@ -498,14 +502,15 @@ window.PageModules.settings = {
           statusEl.textContent = 'Installing update… BlackStack will restart automatically.';
           actionsEl.innerHTML = '';
           this._clearInstallStallTimer();
+          // TASK: safety timeout. A genuine install restarts the app within a few
+          // seconds (main.js force-exits after 10s). If no further update event
+          // arrives within 10s, the install is NOT actually running (stale state
+          // restored from disk) — snap back to IDLE so the "Check for Updates"
+          // button comes back instead of leaving the page stuck forever.
           this._installStallTimer = setTimeout(() => {
             this._installStallTimer = null;
-            statusEl.innerHTML = `
-              <p class="font-body-md"><strong>Update is taking longer than expected.</strong></p>
-              <p class="font-body-sm text-body-sm text-on-surface-variant mt-1">
-                If the app doesn't close automatically, please close it using Task Manager and reopen it.
-              </p>`;
-          }, 30000);
+            render({ status: 'IDLE', percent: null });
+          }, 10000);
           break;
 
         case 'OFFLINE':
@@ -577,7 +582,13 @@ window.PageModules.settings = {
     (async () => {
       try {
         const res = await window.desktop.getUpdateState();
-        if (res && res.ok && res.state && res.state.status !== 'IDLE') {
+        // TASK: INSTALLING/RESTARTING restored from disk is by definition stale —
+        // the app just (re)started, so no install is in progress. Ignore it and
+        // let the live check below decide, so the page never boots stuck on
+        // "Installing update…".
+        const restored = res && res.ok && res.state ? res.state.status : null;
+        if (res && res.ok && res.state && res.state.status !== 'IDLE'
+            && restored !== 'INSTALLING' && restored !== 'RESTARTING') {
           render(res.state);
         }
       } catch { /* fall through to a live check */ }
