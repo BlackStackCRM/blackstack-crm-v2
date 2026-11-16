@@ -25,7 +25,7 @@ window.PageModules.settings = {
     `;
     this.bindEvents();
     await this.renderTab();
-    return () => {};
+    return () => { this.destroy && this.destroy(); };
   },
 
   tabBtn(key, label, icon) {
@@ -264,6 +264,15 @@ window.PageModules.settings = {
 
   // ------------------ UPDATES TAB (desktop app only) ------------------
   async renderUpdates(container) {
+    // TASK 5: stall watchdog. When the state enters INSTALLING the app should
+    // restart within seconds (main.js already force-exits after 10s). If the
+    // app is STILL open 30s later, the installer never took over — tell the
+    // user what to do instead of leaving them staring at "Installing update…".
+    // Cleared whenever the state leaves INSTALLING and on tab teardown.
+    this._installStallTimer = null;
+    this._clearInstallStallTimer = () => {
+      if (this._installStallTimer) { clearTimeout(this._installStallTimer); this._installStallTimer = null; }
+    };
     const isDesktop = !!(window.desktop && window.desktop.isDesktop);
     const canManageUpdateChannel = this._isPlatformOrAgency();
     let info = null;
@@ -488,6 +497,15 @@ window.PageModules.settings = {
         case 'INSTALLING':
           statusEl.textContent = 'Installing update… BlackStack will restart automatically.';
           actionsEl.innerHTML = '';
+          this._clearInstallStallTimer();
+          this._installStallTimer = setTimeout(() => {
+            this._installStallTimer = null;
+            statusEl.innerHTML = `
+              <p class="font-body-md"><strong>Update is taking longer than expected.</strong></p>
+              <p class="font-body-sm text-body-sm text-on-surface-variant mt-1">
+                If the app doesn't close automatically, please close it using Task Manager and reopen it.
+              </p>`;
+          }, 30000);
           break;
 
         case 'OFFLINE':
@@ -566,11 +584,21 @@ window.PageModules.settings = {
     })();
 
     const off = window.desktop.onUpdateStatus((s) => render(s));
+    this._offUpdateStatus = off;
     window.desktop.checkForUpdate().then((res) => {
       if (res && (res.status === 'OFFLINE' || res.status === 'ERROR' || res.status === 'DISABLED')) render(res);
     }).catch(() => render({ status: 'OFFLINE', message: 'Could not reach update server. CRM continues normally.' }));
     setTimeout(() => { if (latest && latest.status === 'CHECKING') render({ status: 'OFFLINE', message: 'Update check timed out. The CRM works normally offline.' }); }, 12000);
     void off;
+  },
+
+  // Tab teardown: the SPA page contract returns a cleanup function. Clear the
+  // stall watchdog (and unsubscribe the updater listener while we are here) so
+  // navigating away from Settings can never leave the timer firing into a dead
+  // DOM or leak the callback.
+  destroy() {
+    this._clearInstallStallTimer && this._clearInstallStallTimer();
+    if (this._offUpdateStatus) { this._offUpdateStatus(); this._offUpdateStatus = null; }
   },
 
   confirmFactoryReset() {

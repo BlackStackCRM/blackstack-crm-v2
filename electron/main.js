@@ -195,6 +195,16 @@ function bootstrap() {
       },
     });
     mainWindow.setMenuBarVisibility(false);
+    // TASK 2: the installer launched by electron-updater cannot take over while
+    // this window is alive. Nothing in this app currently blocks closing (no
+    // `closable: false`, no `close` handler calling event.preventDefault()), but
+    // guard it explicitly: if such a handler is ever added, it must still allow
+    // the close when an update install is in progress.
+    mainWindow.on('close', (event) => {
+      if (global.__isQuittingForUpdate && global.__isQuittingForUpdate()) return; // installer needs the window gone
+      // (no prevention happens today — this hook exists so future
+      // "unsaved changes?" logic cannot deadlock the updater)
+    });
     // Wait for local server, then load. Retry — server boot includes migrations.
     const url = `http://127.0.0.1:${PORT}`;
     let ready = false;
@@ -266,6 +276,34 @@ function bootstrap() {
 function yamlUpdaterCacheDirName(text) {
   const m = /^[ \t]*updaterCacheDirName[ \t]*:[ \t]*['"]?([^'"\r\n#]+)['"]?[ \t]*$/m.exec(text || '');
   return m ? m[1].trim() : null;
+}
+
+/**
+ * Delete electron-updater's cache dir (the staged installer and its metadata).
+ *
+ * TASK 4: a corrupt/truncated cached installer otherwise poisons every retry —
+ * rehydration re-finds the same bad file and sha512 fails forever. Clearing the
+ * cache forces the next "Update Now" to download from scratch. The directory is
+ * resolved the same way electron-updater does it (updaterCacheDirName from
+ * app-update.yml, falling back to app name) — NOT a hard-coded path, so this
+ * stays correct if the app is ever renamed.
+ */
+function clearUpdaterCache(reason) {
+  try {
+    let dirName = null;
+    try {
+      const cfgPath = path.join(process.resourcesPath, 'app-update.yml');
+      dirName = yamlUpdaterCacheDirName(fs.readFileSync(cfgPath, 'utf8'));
+    } catch { /* fall back below */ }
+    const { app: updaterApp } = require('electron-updater');
+    const cacheDir = path.join(updaterApp.baseCachePath, dirName || updaterApp.name);
+    if (!fs.existsSync(cacheDir)) return;
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+    log('Updater cache cleared (' + (reason || 'error') + '): ' + cacheDir);
+    try { updateLogger.event('updater-cache-cleared', { reason: reason || 'error' }); } catch { /* non-fatal */ }
+  } catch (err) {
+    log('Failed to clear updater cache: ' + (err && err.message));
+  }
 }
 
 function rehydrateStagedInstaller() {
@@ -354,6 +392,10 @@ function setupAutoUpdate() {
     // autoDownload was true, so an available update started downloading the
     // instant it was detected and the user never chose. Now detection only
     // ANNOUNCES; the download starts when the user clicks "Update Now".
+    // electron-updater fires this synchronously inside the install-triggered
+    // shutdown, before the quit sequence begins. When it fires, the
+    // before-quit cleanup must not run again or get in the installer's way.
+    autoUpdater.on('before-quit-for-update', () => { global.__setQuittingForUpdate(); });
     autoUpdater.autoDownload = false;
 
     // ── Phase C: "Later" must actually mean later ────────────────────────
@@ -481,6 +523,12 @@ function setupAutoUpdate() {
       // real failure so the UI can say something truthful.
       const offline = /ENOTFOUND|ECONNREFUSED|EAI_AGAIN|ETIMEDOUT|network/i.test(msg);
       emit(offline ? 'OFFLINE' : 'ERROR', { error: msg }, { force: true });
+      // TASK 4: clear the updater cache on download/install failures so a
+      // corrupt or truncated cached installer cannot poison every retry.
+      // Offline/network errors are EXCLUDED: clearing the cache then would
+      // delete a perfectly good downloaded installer just because the next
+      // version CHECK failed while the user was offline.
+      if (!offline) clearUpdaterCache(msg);
     });
 
     // Background check, never blocking startup; ignore failures.
@@ -637,7 +685,19 @@ function setupAutoUpdate() {
       require('./ipc').sendToRenderer('update-status', { status: 'INSTALLING' });
     } catch { /* state persistence must not block the install */ }
     updateLogger.event(updateLogger.EVENTS.INSTALL_STARTED, { from: APP_VERSION });
+    // Belt-and-braces: set the flag ourselves too, in case the
+    // 'before-quit-for-update' event is not emitted before our before-quit runs.
+    global.__setQuittingForUpdate();
     au.quitAndInstall(false, true); // don't run silent installer args; restart app after
+    // TASK 3: force-exit fallback. quitAndInstall can hang if Windows is slow to
+    // release the lock on the downloaded installer (or if AV scans it for a long
+    // time). The installer process, once spawned, survives app.exit(), so this
+    // only fires when the quit genuinely stalled and the installer never started.
+    setTimeout(() => {
+      log('Update install did not complete within 10s — forcing exit');
+      updateLogger.event('install-force-exit', { from: APP_VERSION });
+      app.exit(0);
+    }, 10000);
     return { ok: true };
   });
 
@@ -687,7 +747,15 @@ function setupAutoUpdate() {
     })();
   });
 
-  app.on('before-quit', () => {
+  let isQuittingForUpdate = false;
+  global.__isQuittingForUpdate = () => isQuittingForUpdate;
+  global.__setQuittingForUpdate = () => { isQuittingForUpdate = true; };
+
+  app.on('before-quit', (event) => {
+    // When the updater is quitting to install, skip our cleanup — quitAndInstall
+    // has already handled the shutdown, and blocking here can leave the app
+    // stuck at "Installing update..." indefinitely.
+    if (isQuittingForUpdate) return; // Let the updater handle the quit
     try {
       const { _closeCachedConnection } = require(path.join(__dirname, '../server/utils/db'));
       if (_closeCachedConnection) _closeCachedConnection();
