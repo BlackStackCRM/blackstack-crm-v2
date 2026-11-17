@@ -151,8 +151,18 @@ const { authMiddleware } = require('./middleware/auth');
 const { checkSubscriptionStatus, isSubscriptionBypassPath } = require('./middleware/subscription');
 app.use('/api', (req, res, next) => {
   if (isSubscriptionBypassPath(req.path)) return next();
+  // authMiddleware is invoked with a 4th callback to handle auth errors before
+  // subscription gating. Internally authMiddleware treats the 4th arg as `next`
+  // and calls it on success. On auth failure it throws (doesn't call next), so
+  // Express's error handler picks it up; the callback is only invoked when
+  // authMiddleware completes synchronously (on success path).
   authMiddleware(req, res, (authError) => {
-    if (authError) return next(authError);
+    if (authError) {
+      // authError is always an AppError (401/403). Pass to Express error
+      // handler so the standard errorResponse is returned. Do NOT call the
+      // subscription check for failed auth — that is already handled.
+      return next(authError);
+    }
     return checkSubscriptionStatus(req, res, next);
   });
 });

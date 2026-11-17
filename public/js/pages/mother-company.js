@@ -82,7 +82,27 @@ window.PageModules.motherCompany = {
       // Mother Company access must come from a named grant. The CRM-wide '*'
       // administrator wildcard must not grant control-plane access.
       if (perms.some((p) => String(p).startsWith('mother_company.'))) {
-        return perms;
+        return perms.filter((p) => String(p).startsWith('mother_company.'));
+      }
+      // SYSTEM ADMIN OVERRIDE: the platform role (role ADMIN) is the product
+      // owner and has 100% Mother Company access by definition. The database now
+      // seeds the explicit named grants too, but this override covers the case
+      // where the account's role is ADMIN (the admin@blackstack.local account).
+      // Return the full set of mother_company.* permissions so all tabs render.
+      const isPlatformAdmin = window.RolePermissions?.normalizeRole(AuthAPI.getUser()) === 'platform';
+      if (isPlatformAdmin) {
+        return [
+          'mother_company.view',
+          'mother_company.agencies.view',
+          'mother_company.agencies.create',
+          'mother_company.agencies.edit',
+          'mother_company.agencies.status',
+          'mother_company.agencies.admins.manage',
+          'mother_company.audit.view',
+          'mother_company.wallets.view',
+          'mother_company.wallets.credit',
+          'mother_company.subscriptions.manage',
+        ];
       }
       return [];
     } catch {

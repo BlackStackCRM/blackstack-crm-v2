@@ -92,6 +92,12 @@ function requireMotherCompany(permissionCode) {
     if (!req.user) {
       throw new AuthenticationError('Authentication required');
     }
+    // System Admin / Platform: always granted by definition. The '*' wildcard
+    // is NOT used here — we explicitly test the role code.
+    if (req.user.role === 'ADMIN' || req.user.role === 'platform') {
+      next();
+      return;
+    }
     if (!isPlatformAccount(req) || !hasMotherCompanyPermission(req.user, permissionCode)) {
       // Deliberately does not echo the permission code back to the client: the
       // error should not become an oracle for which internal codes exist.
@@ -109,6 +115,13 @@ function requireAnyMotherCompanyPermission() {
   return (req, res, next) => {
     if (!req.user) {
       throw new AuthenticationError('Authentication required');
+    }
+    // System Admin / Platform bypass — same rule as requireMotherCompany().
+    // Without it the Mother Company DASHBOARD SHELL 403s for ADMIN even though
+    // every concrete action endpoint (/agencies, /audit, ...) lets them through.
+    if (req.user.role === 'ADMIN' || req.user.role === 'platform') {
+      next();
+      return;
     }
     if (!isPlatformAccount(req) || !isMotherCompanyUser(req.user)) {
       throw new AuthorizationError('Mother Company access required');
