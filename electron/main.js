@@ -31,7 +31,53 @@ const crypto = require('crypto');
 // the exact same environment.
 function ensureLocalRuntimeConfig(userDataDir, log) {
   const pointerFile = path.join(userDataDir, 'shared-env-path.txt');
-  if (fs.existsSync(pointerFile)) return; // already configured — nothing to do
+  if (fs.existsSync(pointerFile)) {
+    // REPAIR PATH (System 2 fix): machines that first ran an older build may
+    // already have a runtime .env with EMPTY Supabase credentials — the pointer
+    // exists, so the fresh-install branch below never ran again and every
+    // upgrade kept failing with 'Invalid credentials'. When the existing env
+    // lacks the keys, patch them in from the packaged 'blackstack.env'.
+    try {
+      const dataDir = path.join(app.getPath('appData'), 'blackstack-crm-v2', 'data');
+      const envPath = path.join(dataDir, '.env');
+      if (fs.existsSync(envPath)) {
+        const text = fs.readFileSync(envPath, 'utf8');
+        const readVar = (name) => {
+          const m = text.match(new RegExp('^\\s*' + name + '\\s*=\\s*(.*)\\s*$', 'm'));
+          return m ? m[1].trim().replace(/^"|"$/g, '').replace(/^'|'$/g, '') : '';
+        };
+        if (!readVar('SUPABASE_URL') || !readVar('SUPABASE_SERVICE_ROLE_KEY')) {
+          const packagedEnv = path.join(path.dirname(process.execPath), '..', 'resources', 'blackstack.env');
+          const altPackagedEnv = path.join(path.dirname(process.execPath), 'resources', 'blackstack.env');
+          const source = [packagedEnv, altPackagedEnv].find((p) => fs.existsSync(p));
+          if (source) {
+            const packaged = {};
+            for (const line of fs.readFileSync(source, 'utf8').split(/\r?\n/)) {
+              const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+              if (m) packaged[m[1]] = m[2].trim().replace(/^"|"$/g, '').replace(/^'|'$/g, '');
+            }
+            let patched = text;
+            for (const name of ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']) {
+              const value = packaged[name] || '';
+              if (!value) continue;
+              if (new RegExp('^\\s*' + name + '\\s*=', 'm').test(patched)) {
+                patched = patched.replace(new RegExp('^\\s*' + name + '\\s*=\\s*.*$', 'm'), `${name}=${value}`);
+              } else {
+                patched += `\n${name}=${value}`;
+              }
+            }
+            fs.writeFileSync(envPath, patched, { encoding: 'utf8' });
+            log('Patched missing Supabase credentials into existing env from: ' + source);
+          } else {
+            log('Existing env is missing Supabase credentials and no packaged blackstack.env was found');
+          }
+        }
+      }
+    } catch (e) {
+      log('Supabase credential repair warning: ' + e.message);
+    }
+    return; // pointer already set — provisioning not needed
+  }
 
   // Data folder. Keep the historical name so upgrades from early builds that
   // manually created %APPDATA%\blackstack-crm-v2\data keep their database.
@@ -43,8 +89,30 @@ function ensureLocalRuntimeConfig(userDataDir, log) {
 
   if (!fs.existsSync(envPath)) {
     const jwtSecret = crypto.randomBytes(32).toString('hex');
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    // ISSUE 2 fix: on a fresh install process.env is empty — the packaged
+    // installer ships the real Supabase credentials as an extraResource
+    // ('blackstack.env' next to the executable). Read them from there so the
+    // generated runtime .env can actually reach Supabase on machine #2.
+    let supabaseUrl = process.env.SUPABASE_URL || '';
+    let supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    if (!supabaseUrl || !supabaseKey) {
+      try {
+        const packagedEnv = path.join(path.dirname(process.execPath), '..', 'resources', 'blackstack.env');
+        const altPackagedEnv = path.join(path.dirname(process.execPath), 'resources', 'blackstack.env');
+        const source = [packagedEnv, altPackagedEnv].find((p) => fs.existsSync(p));
+        if (source) {
+          for (const line of fs.readFileSync(source, 'utf8').split(/\r?\n/)) {
+            const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+            if (!m) continue;
+            if (m[1] === 'SUPABASE_URL' && !supabaseUrl) supabaseUrl = m[2].trim();
+            if (m[1] === 'SUPABASE_SERVICE_ROLE_KEY' && !supabaseKey) supabaseKey = m[2].trim();
+          }
+          log('Read Supabase credentials from packaged env: ' + source);
+        }
+      } catch (e) {
+        log('Packaged env read failed: ' + e.message);
+      }
+    }
     const env = [
       'NODE_ENV=production',
       'PORT=3000',

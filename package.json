@@ -1,6 +1,6 @@
 {
   "name": "blackstack-crm-v2",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "BlackStack CRM V2 - Full-stack CRM application",
   "main": "electron/main.js",
   "scripts": {
@@ -66,6 +66,12 @@
       "server/**",
       "public/**",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".env",
+        "to": "blackstack.env"
+      }
     ],
     "asar": true,
     "win": {
