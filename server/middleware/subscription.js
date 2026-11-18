@@ -3,6 +3,16 @@ const { resolveCaller } = require('../services/rbac.service');
 
 const BYPASS_PREFIXES = ['/auth/', '/wallet/'];
 
+// Issue 1 fix: a newly created Distribution Agency has no ACTIVE subscription
+// row yet — it cannot pay before it can log in and see the dashboard. The
+// dashboard summary endpoint stays readable while blocked so the agency can at
+// least load the dashboard and reach the wallet/recharge UI.
+const BLOCKED_READ_ALLOWED = ['/dashboard', '/dashboard/summary', '/dashboard/metrics'];
+
+function diagnosticLoggingEnabled() {
+  return String(process.env.SUBSCRIPTION_DEBUG || '').trim() !== '';
+}
+
 function isSubscriptionBypassPath(pathname = '') {
   const path = String(pathname).split('?')[0];
   return path === '/auth' || path === '/wallet'
@@ -45,6 +55,28 @@ function createCheckSubscriptionStatus(getDatabase = getConn) {
 
       const expired = latest && (String(latest.status).toUpperCase() === 'EXPIRED'
         || (latest.end_date && db.get("SELECT datetime(?) < datetime('now') AS expired", [latest.end_date])?.expired === 1));
+
+      // Issue 1 fix: let a blocked tenant still READ the dashboard summary so
+      // the shell renders and the wallet/recharge screen is reachable.
+      if (req.method === 'GET' && BLOCKED_READ_ALLOWED.includes(req.path)) {
+        if (diagnosticLoggingEnabled()) {
+          console.warn('[subscription] blocked company allowed through for dashboard:', {
+            companyId, reason: expired ? 'EXPIRED' : 'NONE', path: req.path,
+          });
+        }
+        return next();
+      }
+
+      if (diagnosticLoggingEnabled()) {
+        console.warn('[subscription] blocking request with SUBSCRIPTION_INACTIVE:', {
+          companyId,
+          method: req.method,
+          path: req.path,
+          reason: expired ? 'EXPIRED' : 'NONE',
+          latestStatus: latest ? latest.status : null,
+          latestEndDate: latest ? latest.end_date : null,
+        });
+      }
       return res.status(403).json({
         error: 'SUBSCRIPTION_INACTIVE',
         reason: expired ? 'EXPIRED' : 'NONE',

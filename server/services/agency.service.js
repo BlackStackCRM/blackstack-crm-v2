@@ -474,6 +474,48 @@ class AgencyService {
       );
 
       this.recordStatusChange(agencyId, null, AGENCY_STATUS.PENDING, 'Agency created', actor ? actor.id : null);
+
+      // Issue 1 fix: seed a 14-day trial subscription so a newly created
+      // agency is not immediately 403'd by checkSubscriptionStatus on its
+      // first login. Without this the dashboard (and therefore the wallet /
+      // recharge screen the operator needs to actually pay) never loads.
+      try {
+        const plan = this.db.get(
+          "SELECT id, name FROM subscription_plans ORDER BY rowid LIMIT 1",
+        );
+        const trialDays = 14;
+        const startsAt = new Date().toISOString();
+        const expiresAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
+        this.db.run(
+          `INSERT INTO subscriptions
+             (id, company_id, account_type, plan_id, plan_name, amount_minor,
+              duration_days, starts_at, expires_at, status, payment_status,
+              auto_renew, assigned_by, end_date)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [
+            generateId('sub'),
+            agencyCompanyId,
+            'agency',
+            plan ? plan.id : null,
+            plan ? plan.name : 'Trial',
+            0,
+            trialDays,
+            startsAt,
+            expiresAt,
+            'ACTIVE',
+            'PAID',
+            0,
+            actor ? actor.id : null,
+            expiresAt.slice(0, 10) + 'T23:59:59.999Z',
+          ],
+        );
+        console.log('[agency] seeded trial subscription for new agency:', { agencyId, agencyCompanyId, expiresAt });
+      } catch (trialErr) {
+        // Non-fatal: the subscription middleware also exempts the dashboard
+        // read path, so the agency can still load the dashboard and recharge.
+        console.warn('[agency] trial subscription seed failed:', trialErr.message);
+      }
+
       this.audit({
         actorId: actor ? actor.id : null,
         companyId: providerCompanyId,
