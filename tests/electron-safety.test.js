@@ -149,7 +149,7 @@ describe('Phase 2: UpdateService provider binding', () => {
     const status = await UpdateService.getUpdateStatus();
     expect(status.status).toBe('DISABLED');
     const version = await UpdateService.getCurrentVersion();
-    expect(version.version).toBe('1.2.0');
+    expect(version.version).toBe('1.2.1');
   });
 
   it('bound provider is used and errors degrade gracefully', async () => {
