@@ -37,8 +37,14 @@ function makeAgencyAdmin(name, email) {
      VALUES (?,?,?,?,?,?,1)`,
     [agencyId, companyId, 'default', `AGY-${name.toUpperCase()}`, `${name} Agency`, 'ACTIVE'],
   );
-  db.run('INSERT OR IGNORE INTO users (id, company_id, username, email, full_name, role, status, hierarchy_role) VALUES (?,?,?,?,?,?,?,?)',
-    [userId, companyId, name.toLowerCase(), email, name, 'USER', 'ACTIVE', 'agency']);
+  // password_hash is NOT NULL (migration 002_identity.sql:25). The earlier
+  // fixture omitted it, and because every INSERT here is `INSERT OR IGNORE`
+  // the NOT NULL violation was swallowed silently: no user row was created,
+  // resolveCaller() then returned null, and every scoped call failed with
+  // "AuthorizationError: Authentication required." The hash value is never
+  // verified by these service tests, so a placeholder is sufficient.
+  db.run('INSERT OR IGNORE INTO users (id, company_id, username, email, password_hash, full_name, role, status, hierarchy_role) VALUES (?,?,?,?,?,?,?,?,?)',
+    [userId, companyId, name.toLowerCase(), email, 'not-a-real-password-hash', name, 'USER', 'ACTIVE', 'agency']);
   db.run('INSERT OR IGNORE INTO agency_administrators (id, agency_id, user_id, company_id, role_code, status) VALUES (?,?,?,?,?,?)',
     [`aad_${name.toLowerCase()}`, agencyId, userId, companyId, 'AGENCY_ADMIN', 'ACTIVE']);
   return userId;

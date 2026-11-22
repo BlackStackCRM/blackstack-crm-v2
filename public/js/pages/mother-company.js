@@ -87,7 +87,7 @@ window.PageModules.motherCompany = {
       // SYSTEM ADMIN OVERRIDE: the platform role (role ADMIN) is the product
       // owner and has 100% Mother Company access by definition. The database now
       // seeds the explicit named grants too, but this override covers the case
-      // where the account's role is ADMIN (the admin@blackstack.local account).
+      // where the account's role is ADMIN (the system administrator account).
       // Return the full set of mother_company.* permissions so all tabs render.
       const isPlatformAdmin = window.RolePermissions?.normalizeRole(AuthAPI.getUser()) === 'platform';
       if (isPlatformAdmin) {

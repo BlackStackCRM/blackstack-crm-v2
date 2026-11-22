@@ -1545,9 +1545,13 @@ class AgencyControlService {
     if (!['agency', 'sub_agency', 'platform'].includes(actor.role)) {
       throw new AuthorizationError('Your role does not have permission to create customer tenants.');
     }
-    if (['agency', 'sub_agency'].includes(actor.role) && agencyId !== actor.localAgencyId) {
-      throw new AuthorizationError('Customer tenants must be created under your own agency.');
-    }
+    // FIX: this guard used to run BEFORE assertAgencyInScope and throw
+    // AUTHORIZATION_ERROR (403) whenever an agency named any agency other
+    // than its own. That made the real scope check unreachable and leaked the
+    // existence of another tenant's agency — the codebase's stated convention
+    // is to report out-of-scope entities as NOT_FOUND (404), never 403 (see
+    // assertAgencyInScope). The scope decision now belongs solely to the
+    // assertAgencyInScope call below.
     // FIX (audit 2026-11-02): assertAgencyInScope and callerAgency are ASYNC;
     // the former call sites skipped `await`, so the scope guard never ran (a
     // Promise is always truthy) and `.company_id` was read off a Promise

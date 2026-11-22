@@ -10,7 +10,7 @@
     "electron:build": "electron-builder --win nsis",
     "electron:build:win": "electron-builder --win nsis --publish never",
     "electron:build:phase-d": "node scripts/phase-d-build.js",
-    "electron:build:prod": "npm run electron:release:win",
+    "electron:build:prod": "node scripts/require-signing.js && electron-builder --win nsis --publish always \"-c.win.forceCodeSigning=true\"",
     "release:hash": "node scripts/release-hash.js",
     "release:verify-installer": "node scripts/verify-installer.js",
     "acceptance:installer": "node tests/installer-data-preservation.mjs",

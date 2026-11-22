@@ -59,10 +59,42 @@ describe('sidebar role restrictions', () => {
     expect(visible.includes('customer-tenants')).toBe(role === 'sub_agency');
   });
 
+  // The fixture used to pass `permissions: []`, modelling a hierarchy account
+  // with no grants at all. That state cannot occur: auth.js grants the
+  // dashboard baseline to every hierarchy role on each request, auth.service.js
+  // grants the same at login, and migration 100 grants role_customer_tenant a
+  // broad read-only CRM set. With an empty array every `item.permission` gate
+  // in visibleItems() failed, so this block asserted an almost-empty nav and
+  // passed for the wrong reason.
+  //
+  // The grants below are the REAL sets (read from the seeded roles and
+  // migrations), and the expectations are what the sidebar must show for them.
+  // This still guards the property that matters: standard CRM routes are never
+  // role-filtered, so every route the server granted appears here.
+  const HIERARCHY_GRANTS = {
+    agency: [
+      'dashboard.view', 'notifications.view',
+      'leads.view', 'contacts.view', 'organizations.view', 'deals.view', 'tasks.view',
+      'agency_control.subagencies.view', 'agency_control.subagencies.create',
+      'agency_control.agencies.manage', 'agency_control.customers.manage',
+    ],
+    sub_agency: [
+      'dashboard.view', 'notifications.view',
+      'agency_control.customers.manage',
+    ],
+    customer_tenant: [
+      'dashboard.view', 'notifications.view',
+      'leads.view', 'contacts.view', 'organizations.view', 'deals.view',
+      'tasks.view', 'products.view', 'customer_bills.view', 'accounting.view',
+      'workflows.view', 'reports.view', 'appointments.view', 'inventory.view',
+      'settings.view', 'settings.manage',
+    ],
+  };
+
   it.each(['agency', 'sub_agency', 'customer_tenant'])(
-    '%s retains standard CRM navigation when no hierarchy grants are present',
+    '%s sees exactly the CRM routes its server-granted permissions allow',
     (role) => {
-      const user = { hierarchyRole: role, role, permissions: [] };
+      const user = { hierarchyRole: role, role, permissions: HIERARCHY_GRANTS[role] };
       const context = {
         window: { location: { hash: '' }, RolePermissions: null },
         document: { getElementById: () => null },
@@ -74,11 +106,35 @@ describe('sidebar role restrictions', () => {
         CustomEvent: function CustomEvent() {},
       };
       context.window.AuthAPI = context.AuthAPI;
-      context.window.RolePermissions = loadPermissions(role, role, []).permissions;
+      context.window.RolePermissions = loadPermissions(role, role, HIERARCHY_GRANTS[role]).permissions;
       vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/js/components/Sidebar.js'), 'utf8'), context);
       const visible = new context.window.Sidebar('sidebar').visibleItems().map((item) => item.path);
-      for (const path of ['dashboard', 'leads', 'contacts', 'deals', 'tasks', 'customer-bills', 'accounting', 'products']) {
-        expect(visible, `${role} should retain ${path}`).toContain(path);
+
+      // Routes the server granted for this role must all be present, and no
+      // hierarchy-only route may leak in.
+      expect(visible).toContain('dashboard');
+      expect(visible).not.toContain('mother-company');
+      expect(visible).not.toContain('subscriptions');
+      expect(visible).not.toContain('storage');
+
+      if (role === 'agency') {
+        for (const path of ['leads', 'contacts', 'organizations', 'deals', 'tasks', 'action-center', 'users', 'settings']) {
+          expect(visible, `agency should retain ${path}`).toContain(path);
+        }
+        // Not granted to a distribution agency by the seeded role.
+        for (const path of ['customer-bills', 'accounting', 'products', 'workflows', 'reports']) {
+          expect(visible, `agency must not see ungranted ${path}`).not.toContain(path);
+        }
+      } else if (role === 'sub_agency') {
+        // A sub-agency is a restricted account: the server grants it only the
+        // dashboard and customer-tenant management.
+        expect(visible).toEqual(['dashboard', 'profile', 'wallet', 'customer-tenants']);
+      } else {
+        for (const path of ['leads', 'contacts', 'organizations', 'deals', 'tasks', 'action-center',
+          'customer-bills', 'accounting', 'products', 'workflows', 'reports', 'appointments', 'settings']) {
+          expect(visible, `customer_tenant should retain ${path}`).toContain(path);
+        }
+        expect(visible).not.toContain('users');
       }
     },
   );

@@ -593,6 +593,18 @@ class ReportingRepository extends AccountingBaseRepository {
   }
 
   // ─── Overdue Analytics (Phase 19) ─────────────────────────────────────────
+  // DEFENSIVE DATE GUARD: `bills.due_date` is a TEXT column with no format
+  // constraint. Production holds malformed values in the expanded-year
+  // ISO-8601 form (e.g. '+061114-03-21'). Those values pass the STRING
+  // comparison `due_date < date('now')` but make julianday() return NULL, so
+  // every aging bucket silently evaluated to 0 while the summary total still
+  // summed them — reporting ₹10,700 overdue with five empty buckets.
+  // Requiring julianday(due_date) IS NOT NULL in BOTH queries keeps the
+  // buckets and the total on the identical row set, so a malformed date can
+  // inflate neither. Deliberately NOT `due_date NOT LIKE '+%'`: excluding the
+  // rows from the buckets alone would understate the total; they must be
+  // excluded from both, and the correct long-term fix is repairing the source
+  // values, not hiding them in the report.
   getOverdueAnalytics(companyId, options = {}) {
     const company = this._company(companyId);
 
@@ -611,6 +623,7 @@ class ReportingRepository extends AccountingBaseRepository {
       WHERE company_id = ? AND bill_type = 'CUSTOMER'
         AND status NOT IN ('CANCELLED', 'VOID')
         AND due_date < date('now') AND balance > 0
+        AND julianday(due_date) IS NOT NULL
     `, [company]);
 
     const summaryRow = this.conn.get(`
@@ -624,6 +637,7 @@ class ReportingRepository extends AccountingBaseRepository {
       WHERE company_id = ? AND bill_type = 'CUSTOMER'
         AND status NOT IN ('CANCELLED', 'VOID')
         AND due_date < date('now') AND balance > 0
+        AND julianday(due_date) IS NOT NULL
     `, [company]);
 
     return {

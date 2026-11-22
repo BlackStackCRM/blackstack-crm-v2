@@ -795,7 +795,8 @@ function setupAutoUpdate() {
       };
     }
     // 4. CRITICAL FIX: gracefully close the in-process Express server and SQLite
-    //    connection BEFORE calling quitAndInstall(). The server-host module exposes
+    //    connection BEFORE triggering the native installer (see the
+    //    quit-and-install call further down). The server-host module exposes
     //    a stop() handle; app.js's graceful shutdown (SIGTERM) closes the HTTP
     //    server then the SQLite connection. Releasing these handles is what lets
     //    the NSIS installer overwrite the application files on the next restart.
