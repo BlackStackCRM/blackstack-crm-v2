@@ -3,14 +3,16 @@
  * RELEASE SHA-256 HASHING — BlackStack CRM
  *
  * Usage:
- *   node scripts/release-hash.js                        # hash latest dist installer
+ *   node scripts/release-hash.js                        # hash latest installer
+ *                                                       # (output dir read from
+ *                                                       #  build.directories.output)
  *   node scripts/release-hash.js path\to\Setup.exe      # hash a specific file
  *   node scripts/release-hash.js <file> --write         # also write .sha256 checksum file
  *
  * Guarantees (Master Prompt §33):
  *   - Fails if the installer does not exist (never hashes a stale/old binary).
- *   - Refuses to hash a file modified before the newest dist build artifacts,
- *     so a hash can never be computed from anything but the final binary.
+ *   - Resolves the build output directory from package.json so it cannot hash
+ *     an installer left over in a previous output directory.
  *   - Never modifies the installer.
  */
 const fs = require('fs');
@@ -18,9 +20,26 @@ const path = require('path');
 const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
-const DIST = path.join(ROOT, 'dist');
+
+/**
+ * The output directory is owned by the electron-builder configuration
+ * (package.json -> build.directories.output, currently "dist4"). Older builds
+ * emitted to "dist", so the directory is resolved from config rather than
+ * hard-coded — otherwise this script hashes a stale binary in the wrong place.
+ */
+function resolveDistDir() {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    const configured = pkg && pkg.build && pkg.build.directories && pkg.build.directories.output;
+    if (configured) return path.join(ROOT, configured);
+  } catch { /* fall through to the historical default */ }
+  return path.join(ROOT, 'dist');
+}
+
+const DIST = resolveDistDir();
 
 function findInstaller() {
+  if (!fs.existsSync(DIST)) return null;
   const candidates = fs.readdirSync(DIST)
     .filter((f) => /^BlackStack CRM Setup.*\.exe$/i.test(f) || /^BlackStack-?CRM-?Setup.*\.exe$/i.test(f))
     .map((f) => path.join(DIST, f))
@@ -46,7 +65,7 @@ async function main() {
 
   const installer = fileArg ? path.resolve(fileArg) : findInstaller();
   if (!installer) {
-    console.error('ERROR: No installer found in dist/. Build first: npm run electron:build:win');
+    console.error('ERROR: No installer found in ' + DIST + '. Build first: npm run electron:build:win');
     process.exit(1);
   }
   if (!fs.existsSync(installer)) {
