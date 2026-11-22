@@ -14,15 +14,18 @@
  *     NEVER writes back to Supabase — this path is a one-way read.
  *   - Local writes are INSERT OR IGNORE keyed on the cloud UUID, so re-login
  *     never duplicates or overwrites locally-edited data.
- *   - Supabase credentials come from server/config/supabase.js (service role,
- *     server-side only). Nothing here is reachable from the renderer.
- *   - Failure is non-fatal for authentication: if the cloud is unreachable the
- *     login proceeds with whatever already exists locally.
+ *   - Supabase credentials come from server/config/supabase.js (ANON key in
+ *     desktop builds). With the anon key, `auth.admin.getUserById` is NOT
+ *     available — identity metadata is resolved through RLS-protected table
+ *     reads (profiles) instead. Failure is non-fatal for authentication:
+ *     if the cloud is unreachable the login proceeds with whatever already
+ *     exists locally.
+ *   - PRIVILEGED operations (admin user lookup, cross-tenant reads) belong
+ *     in Supabase Edge Functions, never in this desktop client.
  */
 
 const { isConfigured, getSupabaseClient } = require('../config/supabase');
 const { generateId } = require('../utils/generateId');
-const { PasswordService } = require('../auth/password');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -48,25 +51,50 @@ async function syncUserCompanyFromCloud(db, identity, log = console) {
     return { synced: false, reason: 'UNCONFIGURED', companyId: null, agencyId: null, profile: null };
   }
 
+  // ── AUTH-AS-USER (critical for the anon key) ─────────────────────────────
+  // With the ANON key, RLS resolves auth.uid() ONLY when the request carries
+  // the user's own JWT. A bare anon client would see ZERO rows (every policy
+  // is scoped to auth.uid()). The access token comes straight from the
+  // successful signInWithPassword grant in auth.service.login().
+  const accessToken = identity.accessToken || null;
+  if (!accessToken) {
+    log.info && log.info('[cloud-sync] no Supabase access token — cannot read RLS-protected rows as user');
+    return { synced: false, reason: 'NO_TOKEN', companyId: null, agencyId: null, profile: null };
+  }
   const sb = getSupabaseClient();
+  sb.auth.setSession({ access_token: accessToken, refresh_token: '' });
 
   // ── 1. Resolve the Supabase Auth identity ────────────────────────────────
-  // When app_metadata was set at account creation it names the role and the
-  // owning agency/company directly; otherwise we fall back to email lookup.
+  // All reads run WITH the user's JWT, so RLS exposes exactly their own row
+  // (profiles.user_id = auth.uid()) and their own tenant's mapping rows. No
+  // auth.admin.* calls — those need the service role and stay server-side.
   let authUser = null;
+  let authUserId = null;
   if (identity.supabaseUserId && isUuid(identity.supabaseUserId)) {
-    const { data } = await sb.auth.admin.getUserById(identity.supabaseUserId);
-    authUser = data && data.user ? data.user : null;
+    authUserId = identity.supabaseUserId;
   }
-  if (!authUser) {
-    // Email-indexed lookup via the profiles mirror first (cheap), then Auth.
+  if (!authUserId) {
+    // Self-row lookup via the profiles mirror (RLS: user_id = auth.uid()).
     const { data: profRows } = await sb
       .from('profiles').select('user_id, role, agency_id, company_id')
       .eq('username', email).limit(1);
     const prof = profRows && profRows[0];
     if (prof && prof.user_id && isUuid(prof.user_id)) {
-      const { data } = await sb.auth.admin.getUserById(prof.user_id);
-      authUser = data && data.user ? data.user : null;
+      authUserId = prof.user_id;
+    }
+  }
+  // Full user_metadata (full_name etc.) can be read from the profiles row
+  // itself; auth.admin is intentionally not used here.
+  if (authUserId) {
+    const { data: selfRows } = await sb
+      .from('profiles').select('user_id, role, agency_id, company_id, username, full_name')
+      .eq('user_id', authUserId).limit(1);
+    const self = selfRows && selfRows[0];
+    if (self) {
+      authUser = {
+        id: self.user_id,
+        user_metadata: { full_name: self.full_name || null, name: self.full_name || null },
+      };
     }
   }
 
@@ -77,8 +105,10 @@ async function syncUserCompanyFromCloud(db, identity, log = console) {
   let agencyId = null;   // cloud UUID of the owning agency
   let role = (identity.role || '').toLowerCase() || null;
 
-  const meta = (authUser && authUser.app_metadata) || {};
-  role = role || String(meta.role || '').toLowerCase() || null;
+  // ANON-KEY SAFE: app_metadata is not readable with the public key, so the
+  // role hint comes from the RLS-protected profiles row (self) instead.
+  const meta = {};
+  role = role || String((authUser && authUser.user_metadata && authUser.user_metadata.role) || '').toLowerCase() || null;
 
   const localUser = db.get(
     'SELECT id, company_id, supabase_user_id, role, hierarchy_role FROM users WHERE lower(email) = lower(?) LIMIT 1',
@@ -89,6 +119,8 @@ async function syncUserCompanyFromCloud(db, identity, log = console) {
   if (!companyId && meta.agency_id && isUuid(meta.agency_id)) agencyId = meta.agency_id;
 
   if (!companyId && !agencyId) {
+    // RLS-scoped: agency_administrators rows are visible to the caller only
+    // where their subtree policy permits — the caller's own link always is.
     const { data: adminRows } = await sb
       .from('agency_administrators')
       .select('agency_id, role_code, agencies!inner(id, company_id)')
@@ -200,11 +232,10 @@ async function syncUserCompanyFromCloud(db, identity, log = console) {
     );
   } else {
     userId = generateId('usr');
-    // No local password: authentication is delegated to Supabase on the first
-    // session, then the user sets/keeps the password through the app. An empty
-    // hash column would lock the account out of local fallback auth, so we set
-    // a random unusable hash instead.
-    const unusableHash = await PasswordService.hash(generateId('rnd') + generateId('rnd'));
+    // Supabase-only authentication: the local `password_hash` column is NOT a
+    // credential. Store a non-hash sentinel so no legacy code path can ever
+    // treat it as verifiable, and the column never looks like live secret data.
+    const unusableHash = 'CLOUD-AUTH-ONLY:' + ((authUser && authUser.id) || identity.supabaseUserId || 'unlinked');
     db.run(
       `INSERT INTO users (id, company_id, username, email, password_hash, full_name, role, status,
                           hierarchy_role, supabase_user_id, created_at)

@@ -28,12 +28,13 @@
     return s;
   };
 
-  // ── Setup mode RETIRED ──────────────────────────────────────────────────
+  // ── Setup mode RETIRED · SUPABASE-ONLY AUTH ─────────────────────────
   //
   // Local account/company registration is disabled: customer accounts are
   // provisioned centrally by the Agency through Supabase and synced down to
-  // the local SQLite database at login. The login form is ALWAYS the entry
-  // point. Any stale retry-redirect reason is still surfaced.
+  // the local SQLite database at login. Supabase Auth is the SOLE credential
+  // authority — there is NO offline fallback, so login requires an internet
+  // connection. Any stale retry-redirect reason is still surfaced.
   (async function detectSetupMode() {
     // FIX (stale-permission recovery): if we were redirected here by the API
     // interceptor (401/403 after a server-side permission fix), show WHY so

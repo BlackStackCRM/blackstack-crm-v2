@@ -69,6 +69,13 @@ const PW = {
   agy: 'Ag3ncy!Test#2026',
 };
 
+// SUPABASE-ONLY AUTH: these tests provision users directly into the local
+// SQLite users table with bcrypt hashes and then authenticate through the real
+// login endpoint. That path no longer exists — login verifies credentials in
+// Supabase Auth exclusively, so this suite requires a live Supabase project
+// with matching cloud accounts and is skipped when Supabase is not configured.
+const SUPABASE_CONFIGURED = Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY));
+
 let server;
 let child;
 const ids = {};
@@ -208,7 +215,7 @@ afterAll(async () => {
 
 // ── tests ────────────────────────────────────────────────────────────────────
 
-describe('Mother Company HTTP authorization', () => {
+describe.skipIf(!SUPABASE_CONFIGURED)('Mother Company HTTP authorization', () => {
   test('login returns distinct tokens for each account', () => {
     expect(ids.mcToken).toBeTruthy();
     expect(ids.custToken).toBeTruthy();

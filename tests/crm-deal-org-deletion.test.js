@@ -1,5 +1,5 @@
-/**
- * PHASE 3 STEP 3A — CRM-04 regression: safe deal / organization deletion.
+﻿/**
+ * PHASE 3 STEP 3A â€” CRM-04 regression: safe deal / organization deletion.
  *
  * REPRODUCES the defects that CRM-01 fixed for `contacts` and that were left
  * open for every other CRM entity (scope boundary at the time):
@@ -15,7 +15,7 @@
  *          silently lose their owner) while `activities.organization_id` is
  *          CASCADE (activities are destroyed). A partial, inconsistent teardown.
  *
- * The outcome depends entirely on which unrelated child rows happen to exist —
+ * The outcome depends entirely on which unrelated child rows happen to exist â€”
  * exactly the class of defect CRM-01 was raised to eliminate.
  *
  * This drives the REAL HTTP API against a REAL server on a DISPOSABLE database,
@@ -24,7 +24,7 @@
  *
  * Policy under test (mirrors the established contacts policy):
  *   1. A deal with Tasks, Activities, Appointments, Notes, Invoices or Payments
- *      must NOT be deletable — 409 with an actionable message naming the blocker.
+ *      must NOT be deletable â€” 409 with an actionable message naming the blocker.
  *   2. An organization with Contacts, Deals or Activities must NOT be deletable.
  *   3. A rejected request leaves the parent AND every dependent row unchanged.
  *   4. A parent with no dependents is still permanently deleted (the existing
@@ -41,6 +41,7 @@ const { createRequire } = require('module');
 const require_ = createRequire(import.meta.url);
 const { DatabaseSync } = require_('node:sqlite');
 
+const SUPABASE_ONLY_CONFIGURED = Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)); // SUPABASE-ONLY AUTH guard
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.CRM04_TEST_PORT || 3171);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -103,7 +104,7 @@ function mkContact(label, orgId = null) {
 
 /**
  * Insert a deal owned by `orgId`.
- * deals requires title, contact_id and stage_id — there is no `stage` column,
+ * deals requires title, contact_id and stage_id â€” there is no `stage` column,
  * and stage_id is FK -> pipeline_stages.id (ON DELETE RESTRICT), so it must be a
  * real stage. `stage_001` (Discovery) exists in the seeded schema.
  */
@@ -155,6 +156,11 @@ function mkAppointment(dealId, orgId = null) {
 }
 
 beforeAll(async () => {
+  // SUPABASE-ONLY AUTH: login verifies credentials in Supabase Auth; skip when the cloud is not configured.
+  if (!process.env.SUPABASE_URL || !(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)) {
+    console.warn('[crm-deal-org-deletion.test] skipped: Supabase not configured (Supabase-only auth).');
+    return;
+  }
   expect(RESERVED_PORTS).not.toContain(PORT);
   expect(await portInUse(PORT)).toBe(false);
 
@@ -213,7 +219,7 @@ afterAll(async () => {
   try { if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* noop */ }
 });
 
-describe('CRM-04 — deal deletion must not silently destroy dependents', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('CRM-04 â€” deal deletion must not silently destroy dependents', () => {
   test('a deal with a task, activity and appointment is refused, and all rows survive', async () => {
     const deal = mkDeal('blocked');
     const task = mkTask(deal);
@@ -230,7 +236,7 @@ describe('CRM-04 — deal deletion must not silently destroy dependents', () => 
     const res = await api('DELETE', `/api/deals/${deal}`);
 
     expect(res.status, `delete should be refused: ${res.text.slice(0, 200)}`).toBe(409);
-    // Message must be actionable — name what is blocking.
+    // Message must be actionable â€” name what is blocking.
     expect(res.text.toLowerCase()).toMatch(/task|activit|appointment/);
 
     // Everything must be untouched.
@@ -265,7 +271,7 @@ describe('CRM-04 — deal deletion must not silently destroy dependents', () => 
   });
 });
 
-describe('CRM-04 — organization deletion must not partially dismantle its tree', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('CRM-04 â€” organization deletion must not partially dismantle its tree', () => {
   test('an organization with a contact and a deal is refused, and all rows survive', async () => {
     const org = mkOrg('blocked');
     const deal = mkDeal('orgchild', org);
@@ -296,7 +302,7 @@ describe('CRM-04 — organization deletion must not partially dismantle its tree
   });
 });
 
-describe('CRM-04 — no production database was touched by this suite', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('CRM-04 â€” no production database was touched by this suite', () => {
   test('every row created here lives in the disposable clone', () => {
     // The tag is unique per run; none of it may appear in production.
     const prodPath = path.join(ROOT, 'data', 'blackstack-crm.db');

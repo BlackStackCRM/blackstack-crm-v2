@@ -87,6 +87,13 @@ function reconcileMismatches() {
 let itemId, uom, grp, brd, godown, loc, custId, linkedProduct;
 
 beforeAll(async () => {
+  // SUPABASE-ONLY AUTH: login verifies credentials in Supabase Auth. Without a
+  // configured cloud the login below cannot succeed; skip the whole suite.
+  const SUPABASE_CONFIGURED = Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY));
+  if (!SUPABASE_CONFIGURED) {
+    console.warn('[bill-lifecycle] skipped: Supabase not configured — login requires the cloud (Supabase-only auth).');
+    return;
+  }
   expect(await portInUse(PORT)).toBe(false);
 
   tmpDir = fs.mkdtempSync(path.join(process.env.TEMP || '.', 'bill-life-'));
@@ -254,7 +261,7 @@ async function createAndPostBill(ref, qty) {
   return billId;
 }
 
-describe('PHASE 5 — customer-bill lifecycle', () => {
+describe.skipIf(!process.env.SUPABASE_URL || !(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY))('PHASE 5 — customer-bill lifecycle', () => {
   test('stock item is auto-linked to a product', () => {
     expect(itemId).toBeTruthy();
     expect(linkedProduct, 'createStockItem must auto-create and link a product').toBeTruthy();
@@ -339,7 +346,7 @@ describe('PHASE 5 — customer-bill lifecycle', () => {
   });
 });
 
-describe('PHASE 7 — reconciliation', () => {
+describe.skipIf(!process.env.SUPABASE_URL || !(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY))('PHASE 7 — reconciliation', () => {
   test('ledger and balances agree for every item', () => {
     expect(reconcileMismatches()).toEqual([]);
   });

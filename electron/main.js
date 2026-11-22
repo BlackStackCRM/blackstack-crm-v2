@@ -46,7 +46,7 @@ function ensureLocalRuntimeConfig(userDataDir, log) {
           const m = text.match(new RegExp('^\\s*' + name + '\\s*=\\s*(.*)\\s*$', 'm'));
           return m ? m[1].trim().replace(/^"|"$/g, '').replace(/^'|'$/g, '') : '';
         };
-        if (!readVar('SUPABASE_URL') || !readVar('SUPABASE_SERVICE_ROLE_KEY')) {
+        if (!readVar('SUPABASE_URL') || !readVar('SUPABASE_ANON_KEY')) {
           const packagedEnv = path.join(path.dirname(process.execPath), '..', 'resources', 'blackstack.env');
           const altPackagedEnv = path.join(path.dirname(process.execPath), 'resources', 'blackstack.env');
           const source = [packagedEnv, altPackagedEnv].find((p) => fs.existsSync(p));
@@ -57,7 +57,7 @@ function ensureLocalRuntimeConfig(userDataDir, log) {
               if (m) packaged[m[1]] = m[2].trim().replace(/^"|"$/g, '').replace(/^'|'$/g, '');
             }
             let patched = text;
-            for (const name of ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']) {
+            for (const name of ['SUPABASE_URL', 'SUPABASE_ANON_KEY']) {
               const value = packaged[name] || '';
               if (!value) continue;
               if (new RegExp('^\\s*' + name + '\\s*=', 'm').test(patched)) {
@@ -88,13 +88,12 @@ function ensureLocalRuntimeConfig(userDataDir, log) {
   const dbPath = path.join(dataDir, 'blackstack-crm.db');
 
   if (!fs.existsSync(envPath)) {
-    const jwtSecret = crypto.randomBytes(32).toString('hex');
     // ISSUE 2 fix: on a fresh install process.env is empty — the packaged
     // installer ships the real Supabase credentials as an extraResource
     // ('blackstack.env' next to the executable). Read them from there so the
     // generated runtime .env can actually reach Supabase on machine #2.
     let supabaseUrl = process.env.SUPABASE_URL || '';
-    let supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    let supabaseKey = process.env.SUPABASE_ANON_KEY || '';
     if (!supabaseUrl || !supabaseKey) {
       try {
         const packagedEnv = path.join(path.dirname(process.execPath), '..', 'resources', 'blackstack.env');
@@ -105,7 +104,7 @@ function ensureLocalRuntimeConfig(userDataDir, log) {
             const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
             if (!m) continue;
             if (m[1] === 'SUPABASE_URL' && !supabaseUrl) supabaseUrl = m[2].trim();
-            if (m[1] === 'SUPABASE_SERVICE_ROLE_KEY' && !supabaseKey) supabaseKey = m[2].trim();
+            if (m[1] === 'SUPABASE_ANON_KEY' && !supabaseKey) supabaseKey = m[2].trim();
           }
           log('Read Supabase credentials from packaged env: ' + source);
         }
@@ -117,7 +116,13 @@ function ensureLocalRuntimeConfig(userDataDir, log) {
       'NODE_ENV=production',
       'PORT=3000',
       `DB_PATH=${dbPath.replace(/\\/g, '/')}`,
-      `JWT_SECRET=${jwtSecret}`,
+      // SECURITY (audit finding S1): NO JWT_SECRET here. server/auth/jwtSecret.js
+      // fail-closed generates + persists a unique 256-bit secret per install
+      // when JWT_SECRET is absent. Shipping a shared secret in this file would
+      // let ANY install forge admin tokens for EVERY other install.
+      // JWT signing is a trusted-server concern; the packaged env must never
+      // carry it. PAYMENT_WEBHOOK_SECRET is likewise server-only (webhook HMAC
+      // verification) and is NOT written on desktop installs.
       'JWT_EXPIRY=7d',
       'CORS_ORIGIN=*',
       'RATE_LIMIT_WINDOW_MS=900000',
@@ -126,7 +131,7 @@ function ensureLocalRuntimeConfig(userDataDir, log) {
       '',
       '# Supabase Cloud Sync (injected at build time; empty values are harmless)',
       `SUPABASE_URL=${supabaseUrl}`,
-      `SUPABASE_SERVICE_ROLE_KEY=${supabaseKey}`,
+      `SUPABASE_ANON_KEY=${supabaseKey}`,
       '',
     ].join('\n');
     fs.writeFileSync(envPath, env, { encoding: 'utf8' });
@@ -141,6 +146,31 @@ function ensureLocalRuntimeConfig(userDataDir, log) {
   fs.writeFileSync(pointerFile, envPath + '\n', { encoding: 'utf8' });
   log('Wrote shared environment pointer: ' + pointerFile + ' -> ' + envPath);
 }
+
+// ── TASK 1: PACKAGED-ENV LOADING (dotenv) ──────────────────────────────────
+// In a packaged install the project's own .env is NOT present next to app.asar;
+// electron-builder copies it to resources/blackstack.env (see package.json
+// build.extraResources). Load it EXPLICITLY from process.resourcesPath before
+// anything reads process.env.SUPABASE_*, so packaged builds and dev behave
+// identically. Dev mode falls back to the project .env via dotenv's default
+// search; neither path ever overrides variables the host already set.
+function loadPackagedEnvironment() {
+  const dotenv = require('dotenv');
+  const isPackaged = (() => { try { return require('electron').app.isPackaged; } catch { return false; } })();
+  const resourcesPath = (() => { try { return require('electron').process.resourcesPath; } catch { return null; } })();
+  if (isPackaged && resourcesPath) {
+    const packagedEnv = path.join(resourcesPath, 'blackstack.env');
+    if (fs.existsSync(packagedEnv)) {
+      dotenv.config({ path: packagedEnv, override: false });
+      console.log('[main] Loaded packaged environment from:', packagedEnv);
+    } else {
+      console.warn('[main] Packaged env not found at:', packagedEnv);
+    }
+  } else {
+    dotenv.config({ override: false });
+  }
+}
+loadPackagedEnvironment();
 
 // ── Single instance ─────────────────────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock();

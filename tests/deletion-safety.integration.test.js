@@ -1,11 +1,12 @@
-/**
- * Delete Safety & Permanent Deletion — integration tests.
+﻿/**
+ * Delete Safety & Permanent Deletion â€” integration tests.
  * Covers the required scenarios for permanent deletion on a real HTTP server + real SQLite.
  */
 const { spawnSync, spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const SUPABASE_ONLY_CONFIGURED = Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)); // SUPABASE-ONLY AUTH guard
 const ROOT = path.join(__dirname, '..');
 const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'bscrm-del-'));
 const DB_PATH = path.join(TMP_DIR, 'test.db');
@@ -53,6 +54,11 @@ async function analyze(entity_type, entity_id) {
 }
 
 beforeAll(async () => {
+  // SUPABASE-ONLY AUTH: login verifies credentials in Supabase Auth; skip when the cloud is not configured.
+  if (!process.env.SUPABASE_URL || !(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)) {
+    console.warn('[deletion-safety.integration.test] skipped: Supabase not configured (Supabase-only auth).');
+    return;
+  }
   fs.mkdirSync(USER_DATA_DIR, { recursive: true });
   const isolatedEnv = { ...process.env, DB_PATH, BLACKSTACK_USER_DATA_DIR: USER_DATA_DIR };
   const migration = spawnSync(process.execPath, [path.join(ROOT, 'server', 'database', 'migrate.js')], { encoding: 'utf8', env: isolatedEnv, timeout: 60000 });
@@ -69,7 +75,7 @@ afterAll(() => {
   try { fs.rmSync(TMP_DIR, { recursive: true, force: true }); } catch {}
 });
 
-describe('Delete Safety — permanent deletion scenarios', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('Delete Safety â€” permanent deletion scenarios', () => {
   test('1. delete contact with NO linked records succeeds (permanent)', async () => {
     const id = await makeContact();
     const a = await analyze('contact', id);
@@ -148,7 +154,7 @@ describe('Delete Safety — permanent deletion scenarios', () => {
   });
 });
 
-describe('Delete Safety — protection & integrity', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('Delete Safety â€” protection & integrity', () => {
   test('7. protected financial dependency blocks permanent delete', async () => {
     // Create invoice directly in DB (financial record) linked to a contact.
     const cid = await makeContact();
@@ -216,7 +222,7 @@ describe('Delete Safety — protection & integrity', () => {
     expect(dbQuery('SELECT COUNT(*) c FROM tasks WHERE contact_id = ?', [c1])[0].c).toBe(0);
   });
 
-  test('11. restore is not supported — permanent deletion is irreversible', async () => {
+  test('11. restore is not supported â€” permanent deletion is irreversible', async () => {
     const cid = await makeContact();
     // Delete permanently via execute
     const a = await analyze('contact', cid);

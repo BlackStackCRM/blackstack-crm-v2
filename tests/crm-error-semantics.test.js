@@ -1,5 +1,5 @@
-/**
- * PHASE 3 STEP 3C — CRM-05 regression: error semantics.
+﻿/**
+ * PHASE 3 STEP 3C â€” CRM-05 regression: error semantics.
  *
  * REPRODUCES the finding recorded in the Step 2 CRM audit: RESTRICT / constraint
  * failures outside the contacts path returned a generic, and in places
@@ -17,7 +17,7 @@
  * The pattern matches FOUR different failures, but every one of them is reported
  * as a DEPENDENCY problem. So a duplicate-key UNIQUE violation, a CHECK-enum
  * violation and a NOT NULL violation all tell the user that "related records
- * reference this data" — which is false, and sends the user looking in entirely
+ * reference this data" â€” which is false, and sends the user looking in entirely
  * the wrong place.
  *
  * Policy under test:
@@ -39,6 +39,7 @@ const { createRequire } = require('module');
 const require_ = createRequire(import.meta.url);
 const { DatabaseSync } = require_('node:sqlite');
 
+const SUPABASE_ONLY_CONFIGURED = Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)); // SUPABASE-ONLY AUTH guard
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.CRM05_TEST_PORT || 3175);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -87,6 +88,11 @@ function uniqueViolatingContact() {
 }
 
 beforeAll(async () => {
+  // SUPABASE-ONLY AUTH: login verifies credentials in Supabase Auth; skip when the cloud is not configured.
+  if (!process.env.SUPABASE_URL || !(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)) {
+    console.warn('[crm-error-semantics.test] skipped: Supabase not configured (Supabase-only auth).');
+    return;
+  }
   expect(RESERVED_PORTS).not.toContain(PORT);
   expect(await portInUse(PORT)).toBe(false);
 
@@ -137,7 +143,7 @@ afterAll(async () => {
   try { if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* noop */ }
 });
 
-describe('CRM-05 — a duplicate must not be reported as a dependency problem', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('CRM-05 â€” a duplicate must not be reported as a dependency problem', () => {
   test('UNIQUE violation reports DUPLICATE_VALUE, not ENTITY_HAS_DEPENDENCIES', async () => {
     const idx = uniqueViolatingContact();
     // Skip gracefully if the schema has no UNIQUE index we can violate via the API.
@@ -159,7 +165,7 @@ describe('CRM-05 — a duplicate must not be reported as a dependency problem', 
   });
 });
 
-describe('CRM-05 — the constraint mapping (real module, not a copy)', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('CRM-05 â€” the constraint mapping (real module, not a copy)', () => {
   const { classifyError } = require_(path.join(ROOT, 'server', 'utils', 'errorMapping.js'));
   const mk = (message, code = 'ERR_SQLITE_ERROR') => Object.assign(new Error(message), { code });
 
@@ -192,7 +198,7 @@ describe('CRM-05 — the constraint mapping (real module, not a copy)', () => {
     expect(r.message).not.toMatch(/related records reference/i);
   });
 
-  test('an UNRECOGNISED fault stays 500 — real defects must not be disguised', () => {
+  test('an UNRECOGNISED fault stays 500 â€” real defects must not be disguised', () => {
     const r = classifyError(mk('no such table: nope'));
     expect(r.status, 'a genuine internal fault must not become a 4xx').toBe(500);
     const r2 = classifyError(new TypeError('x is not a function'));
@@ -219,7 +225,7 @@ describe('CRM-05 — the constraint mapping (real module, not a copy)', () => {
 
   // ---- Edge branches of classifyError (utils/errorMapping.js) ---------------
 
-  test('an error carrying status 500 is NOT trusted as-is — it stays internal', () => {
+  test('an error carrying status 500 is NOT trusted as-is â€” it stays internal', () => {
     // Only 4xx statuses are trusted; a 500 must not be laundered through the
     // application-error branch with an arbitrary message exposed to the client.
     const err = Object.assign(new Error('server exploded'), { status: 500, code: 'CUSTOM_500' });
@@ -294,7 +300,7 @@ describe('CRM-05 — the constraint mapping (real module, not a copy)', () => {
   });
 });
 
-describe('CRM-05 — the handler in server/app.js delegates to that module', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('CRM-05 â€” the handler in server/app.js delegates to that module', () => {
   test('app.js no longer contains the single-message FK_RE branch', () => {
     const src = fs.readFileSync(path.join(ROOT, 'server', 'app.js'), 'utf8');
     expect(src).toMatch(/require\(['"]\.\/utils\/errorMapping['"]\)/);
@@ -305,7 +311,7 @@ describe('CRM-05 — the handler in server/app.js delegates to that module', () 
     // Every UNIQUE index in this schema is pre-checked by its controller, so a
     // duplicate cannot normally reach SQLite through the API. This forces the
     // genuine database error on a disposable clone and runs it through the real
-    // classifyError() — proving the mapping, not a copy of it.
+    // classifyError() â€” proving the mapping, not a copy of it.
     const { realUniqueViolationVerdict } = require_(path.join(__dirname, 'helpers', 'crm05-unique-violation.js'));
     const out = realUniqueViolationVerdict();
 
@@ -317,7 +323,7 @@ describe('CRM-05 — the handler in server/app.js delegates to that module', () 
   });
 });
 
-describe('CRM-05 — status codes that are already correct must stay correct', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('CRM-05 â€” status codes that are already correct must stay correct', () => {
   test('401 when unauthenticated', async () => {
     const saved = token;
     token = null;
@@ -355,7 +361,7 @@ describe('CRM-05 — status codes that are already correct must stay correct', (
   });
 });
 
-describe('CRM-05 — deal.service.js remains unwired (recorded, not changed)', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('CRM-05 â€” deal.service.js remains unwired (recorded, not changed)', () => {
   test('the service is NOT imported by any server file', () => {
     const fsx = require_('fs');
     const pathx = require_('path');
@@ -386,7 +392,7 @@ describe('CRM-05 — deal.service.js remains unwired (recorded, not changed)', (
   });
 });
 
-describe('CRM-05 — no production database was touched', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('CRM-05 â€” no production database was touched', () => {
   test('no fixture row exists in production', () => {
     const prod = new DatabaseSync(path.join(ROOT, 'data', 'blackstack-crm.db'), { readOnly: true });
     try {

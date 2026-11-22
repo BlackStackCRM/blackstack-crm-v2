@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist*/
 build/
 *.db
 *.db-journal
@@ -8,6 +9,7 @@ build/
 .env
 .env.local
 .env.*.local
+.env.release
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -33,3 +35,12 @@ nul
 
 # Backup database files (never commit)
 backups/
+# Test/QA output & scratch (never commit)
+test-results*/
+reports/
+WORK/
+supabase/.temp/
+public/screenshots/
+tests/screenshots/
+tests/shots/
+*.png

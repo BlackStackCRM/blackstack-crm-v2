@@ -1,11 +1,12 @@
-/**
- * Reset CRM Data — integration tests.
+﻿/**
+ * Reset CRM Data â€” integration tests.
  * Tests tenant isolation, FK-safe deletion, transaction rollback, user preservation.
  */
 const { spawnSync, spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const SUPABASE_ONLY_CONFIGURED = Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)); // SUPABASE-ONLY AUTH guard
 const ROOT = path.join(__dirname, '..');
 const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'bscrm-reset-'));
 const DB_PATH = path.join(TMP_DIR, 'test.db');
@@ -44,6 +45,11 @@ async function login() {
 }
 
 beforeAll(async () => {
+  // SUPABASE-ONLY AUTH: login verifies credentials in Supabase Auth; skip when the cloud is not configured.
+  if (!process.env.SUPABASE_URL || !(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)) {
+    console.warn('[reset-crm-data.integration.test] skipped: Supabase not configured (Supabase-only auth).');
+    return;
+  }
   spawnSync(process.execPath, [path.join(ROOT, 'server', 'database', 'migrate.js')], { encoding: 'utf8', env: { ...process.env, DB_PATH }, timeout: 60000 });
   spawnSync(process.execPath, [path.join(ROOT, 'server', 'database', 'seed.js')], { encoding: 'utf8', env: { ...process.env, DB_PATH, DEMO_MODE: 'true' }, timeout: 60000 });
   serverProc = spawn(process.execPath, [path.join(ROOT, 'server', 'app.js')], { env: { ...process.env, DB_PATH, PORT: String(PORT), NODE_ENV: 'test' }, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -64,7 +70,7 @@ async function makeContact(name = 'TestUser') {
   return j.data?.id || j.data;
 }
 
-describe('Reset CRM Data — core scenarios', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('Reset CRM Data â€” core scenarios', () => {
 
   test('1. confirmation phrase is required', async () => {
     const res = await api('POST', '/settings/reset-crm-data', { token, body: { confirm: 'WRONG' } });
@@ -74,7 +80,7 @@ describe('Reset CRM Data — core scenarios', () => {
   });
 
   test('2. reset requires settings.manage permission', async () => {
-    // User without settings.manage — create a restricted user
+    // User without settings.manage â€” create a restricted user
     const email = `nosettings${Date.now()}@t.io`;
     const res = await api('POST', '/users', { token, body: { username: 'noset' + Date.now(), email, password: 'Passw0rd!123', role: 'viewer' } });
     if (res.status === 201 || res.status === 200) {
@@ -143,7 +149,7 @@ describe('Reset CRM Data — core scenarios', () => {
   });
 
   test('5. system/master data is preserved', async () => {
-    // system_metadata may or may not be seeded — just verify the table itself is intact
+    // system_metadata may or may not be seeded â€” just verify the table itself is intact
     const meta = dbQuery('SELECT COUNT(*) c FROM system_metadata')[0].c;
     expect(meta).toBeGreaterThanOrEqual(0); // table must exist
     expect(dbQuery('SELECT COUNT(*) c FROM permissions')[0].c).toBeGreaterThan(0);
@@ -274,7 +280,7 @@ describe('Reset CRM Data — core scenarios', () => {
   });
 
   test('11. duplicate concurrent reset requests do not corrupt state', async () => {
-    // Fire two resets simultaneously — both must succeed cleanly (idempotent)
+    // Fire two resets simultaneously â€” both must succeed cleanly (idempotent)
     const [r1, r2] = await Promise.all([
       api('POST', '/settings/reset-crm-data', { token, body: { confirm: 'RESET CRM DATA' } }),
       api('POST', '/settings/reset-crm-data', { token, body: { confirm: 'RESET CRM DATA' } }),

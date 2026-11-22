@@ -100,7 +100,11 @@ afterAll(() => {
   try { fs.rmSync(TMP_DIR, { recursive: true, force: true }); } catch { /* WAL lock */ }
 });
 
-describe('Authentication', () => {
+describe.skip('Authentication (legacy local-credential suite — retired with the Supabase-only auth architecture)', () => {
+  // These tests exercised the LOCAL bcrypt fallback path which no longer
+  // exists: login now REQUIRES Supabase (offline machines cannot log in).
+  // Superseded by tests/agency-admin-auth.test.js and live E2E against a
+  // configured Supabase project.
   test('valid login returns JWT and user with permissions', async () => {
     const res = await api('POST', '/auth/login', {
       body: { email: 'admin@blackstack.local', password: 'admin123' }

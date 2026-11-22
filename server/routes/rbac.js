@@ -20,7 +20,6 @@ const { body, param } = require('express-validator');
 const { authMiddleware } = require('../middleware/auth');
 const { getConn } = require('../utils/db');
 const { successResponse } = require('../utils/response');
-const { PasswordService } = require('../auth/password');
 const { generateId } = require('../utils/generateId');
 const { ValidationError, AuthorizationError, NotFoundError } = require('../utils/errors');
 const rbac = require('../services/rbac.service');
@@ -262,29 +261,37 @@ router.post('/auth/password/change',
       // (and newPassword -> new_password); accept both conventions.
       const currentPassword = b.currentPassword || b.current_password;
       const newPassword = b.newPassword || b.new_password;
-      const user = dbi.get('SELECT id, password_hash, must_change_password, email FROM users WHERE id = ?', [req.user.userId]);
+      const user = dbi.get('SELECT id, must_change_password, email FROM users WHERE id = ?', [req.user.userId]);
       if (!user) throw new NotFoundError('User', req.user.userId);
-      const ok = await PasswordService.verify(currentPassword, user.password_hash);
-      if (!ok) throw new AuthorizationError('Current password is incorrect.');
       if (currentPassword === newPassword) {
         throw new ValidationError('Password change failed.', { newPassword: 'New password must differ from the current password.' });
       }
-      const hash = await PasswordService.hash(newPassword);
-      dbi.run('UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [hash, req.user.userId]);
-      // keep the Supabase auth user in sync (best-effort; local is authority)
+      // SUPABASE-ONLY password change: verify the current password IN the cloud
+      // (signInWithPassword — this also yields the access token the self-update
+      // needs) and write the new password THERE. No local hash is computed or
+      // stored; `users.password_hash` is not a credential in this architecture.
+      const { isConfigured, getSupabaseClient } = require('../config/supabase');
+      if (!isConfigured()) {
+        throw new Error('Cannot change password: the authentication service is not configured on this machine.');
+      }
+      const sb = getSupabaseClient();
+      const email = String(user.email).trim().toLowerCase();
+      const { data: signIn, error: signInErr } = await sb.auth.signInWithPassword({ email, password: currentPassword });
+      if (signInErr || !signIn || !signIn.session) {
+        throw new AuthorizationError('Current password is incorrect.');
+      }
+      const { error: updErr } = await sb.auth.updateUser(
+        { password: newPassword },
+        { token: signIn.session.access_token }
+      );
+      if (updErr) throw new Error('Cloud password update failed: ' + updErr.message);
+      dbi.run('UPDATE users SET must_change_password = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [req.user.userId]);
+      // Clear the cloud must_change_password flag too (same authenticated
+      // session — no admin API required).
       try {
-        const sb = require('../config/supabase').getSupabaseClient();
-        const resolved = rbac.resolveCaller(dbi, { userId: req.user.userId });
-        const supabaseUserId = (resolved && resolved.supabaseUserId) || null;
-        // Local users created via accounts/create may have NO Supabase mirror
-        // yet (the auth user lives in Supabase but its id is not stored
-        // locally). updateUserById(undefined, …) throws 'Illegal arguments'.
-        if (supabaseUserId) {
-          await sb.auth.admin.updateUserById(supabaseUserId, { password: newPassword });
-          await sb.from('profiles').update({ must_change_password: false }).eq('user_id', supabaseUserId);
-        }
-      } catch (e) { console.error('[rbac] cloud password mirror failed:', e.message); }
+        await sb.from('profiles').update({ must_change_password: false }).eq('user_id', signIn.user.id);
+      } catch (e) { console.warn('[rbac] cloud flag clear failed:', e.message); }
       res.json(successResponse({ changed: true, mustChangePassword: false }));
     } catch (err) { next(err); }
   });

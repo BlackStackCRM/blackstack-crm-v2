@@ -43,7 +43,17 @@ let server = null;
 let base = null;
 let tmpDir = null;
 
+// SUPABASE-ONLY AUTH: login verifies credentials in Supabase Auth, so this
+// suite (local bcrypt-hash provisioning + real login endpoint) requires a
+// configured Supabase project and is skipped otherwise.
+const SUPABASE_CONFIGURED = Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY));
+
 beforeAll(async () => {
+  if (!SUPABASE_CONFIGURED) {
+    console.warn('[authorization] skipped: Supabase not configured — login requires the cloud (Supabase-only auth).');
+    base = BASE; // keep URL helpers valid; every test is skipped below
+    return;
+  }
   if (await portInUse(PORT)) throw new Error(`port ${PORT} already in use`);
 
   tmpDir = fs.mkdtempSync(path.join(process.env.TEMP || '.', 'authz-test-'));
@@ -122,6 +132,7 @@ let adminToken;
 // below are collected and executed independently, so a token produced by a
 // sibling test is not guaranteed to exist before they run.
 beforeAll(async () => {
+  if (!SUPABASE_CONFIGURED) return; // all suites skipped below
   const mgr = await login('manager@blackstack.local', 'admin123');
   const adm = await login('admin@blackstack.local', 'admin123');
   expect(mgr.status, `manager login failed: ${JSON.stringify(mgr)}`).toBe(200);
@@ -146,7 +157,7 @@ const DATA_SAFETY_ROUTES = [
   ['POST', '/api/datasafety/backups/restore'],
 ];
 
-describe.each(DATA_SAFETY_ROUTES)('%s %s', (method, p) => {
+describe.skipIf(!SUPABASE_CONFIGURED).each(DATA_SAFETY_ROUTES)('%s %s', (method, p) => {
   test('rejects an anonymous caller with 401', async () => {
     const status = await call(method, p, null);
     expect(status).toBe(401);
@@ -167,12 +178,12 @@ describe.each(DATA_SAFETY_ROUTES)('%s %s', (method, p) => {
   });
 });
 
-test('/api/datasafety/version stays public (updater reads it before login)', async () => {
+test.skipIf(!SUPABASE_CONFIGURED)('/api/datasafety/version stays public (updater reads it before login)', async () => {
   const status = await call('GET', '/api/datasafety/version', null);
   expect(status).toBe(200);
 });
 
-test('the live production database was not touched by this test', () => {
+test.skipIf(!SUPABASE_CONFIGURED)('the live production database was not touched by this test', () => {
   // The suite operates on a temp copy; this documents the invariant rather than
   // asserting a checksum that legitimately changes with real user activity.
   expect(tmpDir).toBeTruthy();

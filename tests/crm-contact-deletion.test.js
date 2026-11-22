@@ -1,5 +1,5 @@
-/**
- * PHASE 3 STEP 2A — CRM-01 regression: safe contact deletion.
+﻿/**
+ * PHASE 3 STEP 2A â€” CRM-01 regression: safe contact deletion.
  *
  * REPRODUCES the defect found in the Step 2 CRM audit:
  *
@@ -10,12 +10,12 @@
  * The outcome depended entirely on which unrelated child rows happened to exist.
  *
  * This test drives the REAL HTTP API against a REAL server on a disposable
- * database — not a bare SQL statement — so it exercises routing, auth,
+ * database â€” not a bare SQL statement â€” so it exercises routing, auth,
  * permission, controller logic and the FK layer together.
  *
  * Policy under test (implemented in server/controllers/contacts.controller.js):
  *   1. A contact that has Deals, Tasks, Activities, Appointments, Notes or
- *      Customers must NOT be deletable — the request is rejected with 409 and an
+ *      Customers must NOT be deletable â€” the request is rejected with 409 and an
  *      actionable message naming the blocking entity.
  *   2. The rejected request must leave BOTH the contact and every dependent row
  *      byte-for-byte unchanged.
@@ -33,13 +33,14 @@ const { createRequire } = require('module');
 const require_ = createRequire(import.meta.url);
 const { DatabaseSync } = require_('node:sqlite');
 
+const SUPABASE_ONLY_CONFIGURED = Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)); // SUPABASE-ONLY AUTH guard
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.CRM_DELETE_TEST_PORT || 3145);
 const BASE = `http://127.0.0.1:${PORT}`;
 const TAG = `S2A${Date.now().toString(36).toUpperCase().slice(-6)}`;
 
 // PHASE 3 STEP 2A: this port must be unique across all server-spawning suites.
-// It previously defaulted to 3141 — the same default as bill-lifecycle.test.js —
+// It previously defaulted to 3141 â€” the same default as bill-lifecycle.test.js â€”
 // so under vitest's parallel run the two suites raced for the port and this one
 // ended up talking to the OTHER suite's server and disposable database, which
 // made every fixture look missing (404/NOT_FOUND). Serial runs hid it.
@@ -87,6 +88,11 @@ const dep = {
 };
 
 beforeAll(async () => {
+  // SUPABASE-ONLY AUTH: login verifies credentials in Supabase Auth; skip when the cloud is not configured.
+  if (!process.env.SUPABASE_URL || !(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)) {
+    console.warn('[crm-contact-deletion.test] skipped: Supabase not configured (Supabase-only auth).');
+    return;
+  }
   if (RESERVED_PORTS.includes(PORT)) {
     throw new Error(
       `CRM_DELETE_TEST_PORT=${PORT} collides with another server-spawning suite `
@@ -210,9 +216,9 @@ async function delContact(id, token = adminToken) {
   return { status: r.status, body };
 }
 
-// ── The defect, reproduced ────────────────────────────────────────────────
+// â”€â”€ The defect, reproduced â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('CRM-01 contact deletion policy', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('CRM-01 contact deletion policy', () => {
   test('deletes a contact that has no dependents (permanent delete preserved)', async () => {
     const before = counts();
     const res = await delContact(ids.clean);

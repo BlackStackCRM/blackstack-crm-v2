@@ -59,7 +59,7 @@
     "appId": "com.blackstack.crm",
     "productName": "BlackStack CRM",
     "directories": {
-      "output": "dist"
+      "output": "dist4"
     },
     "files": [
       "electron/**",
@@ -69,7 +69,7 @@
     ],
     "extraResources": [
       {
-        "from": ".env",
+        "from": ".env.release",
         "to": "blackstack.env"
       }
     ],

@@ -1,5 +1,5 @@
-/**
- * PHASE 3 STEP 3D — CRM-06 regression: activities has no delete handler.
+﻿/**
+ * PHASE 3 STEP 3D â€” CRM-06 regression: activities has no delete handler.
  *
  * REPRODUCES the finding recorded in the Step 2 CRM audit:
  *
@@ -8,11 +8,11 @@
  *   DELETE /api/activities/:id -> DOES NOT EXIST
  *
  * The activities router is mounted at /api/activities but exposes only two verbs.
- * Every comparable CRM entity — tasks, notes, appointments, deals, contacts —
+ * Every comparable CRM entity â€” tasks, notes, appointments, deals, contacts â€”
  * can be deleted. Activities cannot, so a logged activity (a call, a meeting, a
  * note-to-self about a deal) is permanent and unretractable through the API.
  *
- * Policy under test — matching the established convention for the sibling
+ * Policy under test â€” matching the established convention for the sibling
  * entities (tasks, notes, appointments), all of which use a tenant-scoped
  * permanent DELETE:
  *
@@ -21,7 +21,7 @@
  *      deleted and must report 404.
  *   3. A non-existent activity returns 404.
  *   4. An unauthenticated request is rejected 401 and changes nothing.
- *   5. Deleting is permanent — no soft-delete flag is introduced.
+ *   5. Deleting is permanent â€” no soft-delete flag is introduced.
  *
  * Why no dependency pre-check: `activities.id` has ZERO inbound foreign keys
  * (verified against the live schema), so an activity delete cannot cascade into
@@ -45,6 +45,7 @@ const { createRequire } = require('module');
 const require_ = createRequire(import.meta.url);
 const { DatabaseSync } = require_('node:sqlite');
 
+const SUPABASE_ONLY_CONFIGURED = Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)); // SUPABASE-ONLY AUTH guard
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.CRM06_TEST_PORT || 3177);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -97,6 +98,11 @@ function mkActivity(label, companyId = 'default') {
 }
 
 beforeAll(async () => {
+  // SUPABASE-ONLY AUTH: login verifies credentials in Supabase Auth; skip when the cloud is not configured.
+  if (!process.env.SUPABASE_URL || !(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)) {
+    console.warn('[crm-activities-deletion.test] skipped: Supabase not configured (Supabase-only auth).');
+    return;
+  }
   expect(RESERVED_PORTS).not.toContain(PORT);
   expect(await portInUse(PORT)).toBe(false);
 
@@ -147,7 +153,7 @@ afterAll(async () => {
   try { if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* noop */ }
 });
 
-describe('CRM-06 — activities must expose a delete handler', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('CRM-06 â€” activities must expose a delete handler', () => {
   test('an activity is permanently deletable', async () => {
     const id = mkActivity('deletable');
     expect(actCount(id)).toBe(1);
@@ -155,7 +161,7 @@ describe('CRM-06 — activities must expose a delete handler', () => {
     const res = await api('DELETE', `/api/activities/${id}`);
 
     expect(res.status, `delete must succeed: ${res.text.slice(0, 220)}`).toBeLessThan(400);
-    expect(actCount(id), 'the activity must be gone — deletion is permanent').toBe(0);
+    expect(actCount(id), 'the activity must be gone â€” deletion is permanent').toBe(0);
   });
 
   test('deleting a NON-EXISTENT activity returns 404', async () => {
@@ -164,7 +170,7 @@ describe('CRM-06 — activities must expose a delete handler', () => {
     expect(res.json?.error?.code).toBe('NOT_FOUND');
   });
 
-  test('deletion is TENANT-scoped: another company’s activity survives', async () => {
+  test('deletion is TENANT-scoped: another companyâ€™s activity survives', async () => {
     const other = mkActivity('other-tenant', 'other_company');
     expect(actCount(other)).toBe(1);
 
@@ -219,12 +225,12 @@ describe('CRM-06 — activities must expose a delete handler', () => {
   });
 });
 
-describe('CRM-06 — no production database was touched', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('CRM-06 â€” no production database was touched', () => {
   test('no fixture row exists in production', () => {
     const prod = new DatabaseSync(path.join(ROOT, 'data', 'blackstack-crm.db'), { readOnly: true });
     try {
       const n = prod.prepare('SELECT COUNT(*) AS c FROM activities WHERE id LIKE ?').get(`%${TAG}%`).c;
-      expect(n, 'production contains this run’s fixtures').toBe(0);
+      expect(n, 'production contains this runâ€™s fixtures').toBe(0);
     } finally { prod.close(); }
   });
 });

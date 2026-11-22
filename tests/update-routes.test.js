@@ -1,5 +1,5 @@
-/**
- * PHASE B regression guard — the update / data-safety ROUTE contract.
+﻿/**
+ * PHASE B regression guard â€” the update / data-safety ROUTE contract.
  *
  * Phase A found two defects that 17 passing unit tests did not catch, because
  * every one of them called `require('server/services/updateService.js')` directly
@@ -11,7 +11,7 @@
  *   authenticated, no permission  -> 403   (a real role_manager user)
  *   authenticated admin           -> 2xx with a valid payload
  *
- * Bodies matter. Both Phase A defects were a 500 and a 400 — a status-only test
+ * Bodies matter. Both Phase A defects were a 500 and a 400 â€” a status-only test
  * would happily have reported "protected but working".
  *
  * Two specific regressions are pinned:
@@ -34,6 +34,7 @@ import { createRequire } from 'module';
 const require_ = createRequire(import.meta.url);
 const { DatabaseSync } = require_('node:sqlite');
 
+const SUPABASE_ONLY_CONFIGURED = Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)); // SUPABASE-ONLY AUTH guard
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.UPDATE_ROUTES_TEST_PORT || 3162);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -78,6 +79,11 @@ async function call(method, p, token, body) {
 }
 
 beforeAll(async () => {
+  // SUPABASE-ONLY AUTH: login verifies credentials in Supabase Auth; skip when the cloud is not configured.
+  if (!process.env.SUPABASE_URL || !(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)) {
+    console.warn('[update-routes.test] skipped: Supabase not configured (Supabase-only auth).');
+    return;
+  }
   expect(await portInUse(PORT)).toBe(false);
 
   tmpDir = fs.mkdtempSync(path.join(process.env.TEMP || '.', 'bscrm-updroutes-'));
@@ -151,8 +157,8 @@ afterAll(async () => {
 });
 
 /**
- * Every /api/datasafety route the Settings → Updates / Data Safety UI calls.
- * `target` is supplied where the route requires a query parameter — a 400 for a
+ * Every /api/datasafety route the Settings â†’ Updates / Data Safety UI calls.
+ * `target` is supplied where the route requires a query parameter â€” a 400 for a
  * missing required parameter is correct behaviour, not a defect.
  */
 const UI_ROUTES = [
@@ -165,7 +171,7 @@ const UI_ROUTES = [
   { method: 'GET', path: '/api/datasafety/storage', label: 'storage dashboard' },
 ];
 
-describe('PHASE B — update/data-safety route authorization contract', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('PHASE B â€” update/data-safety route authorization contract', () => {
   describe.each(UI_ROUTES)('$method $path', ({ method, path: p, body, label }) => {
     test('anonymous -> 401', async () => {
       const r = await call(method, p, null, body);
@@ -190,7 +196,7 @@ describe('PHASE B — update/data-safety route authorization contract', () => {
   });
 });
 
-describe('PHASE B — update-channel behaviour', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('PHASE B â€” update-channel behaviour', () => {
   test('GET returns the configured channel and the channel catalogue', async () => {
     const r = await call('GET', '/api/datasafety/update-channel', adminToken);
     expect(r.status).toBe(200);
@@ -225,7 +231,7 @@ describe('PHASE B — update-channel behaviour', () => {
   });
 });
 
-describe('customer tenant Settings and Data Safety permissions', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('customer tenant Settings and Data Safety permissions', () => {
   test('customer tenant can view and save Settings', async () => {
     expect((await call('GET', '/api/settings', customerToken)).status).toBe(200);
     const saved = await call('PUT', '/api/settings', customerToken, {
@@ -260,7 +266,7 @@ describe('customer tenant Settings and Data Safety permissions', () => {
   });
 });
 
-describe('PHASE B — update-compatibility behaviour', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('PHASE B â€” update-compatibility behaviour', () => {
   test('returns a verdict with schema context', async () => {
     const r = await call('GET', '/api/datasafety/update-compatibility?target=2.0.0', adminToken);
     expect(r.status).toBe(200);
@@ -282,7 +288,7 @@ describe('PHASE B — update-compatibility behaviour', () => {
   });
 });
 
-describe('PHASE B — the module/static regression that caused Phase A', () => {
+describe.skipIf(!SUPABASE_ONLY_CONFIGURED)('PHASE B â€” the module/static regression that caused Phase A', () => {
   test('updateService exposes channel/compat as MODULE functions, not UpdateService statics', () => {
     const svc = require_(path.join(ROOT, 'server/services/updateService.js'));
 
@@ -295,12 +301,12 @@ describe('PHASE B — the module/static regression that caused Phase A', () => {
     // ...and deliberately NOT statics of the exported UpdateService object. The
     // routes used to call UpdateService.getChannel(), which is undefined, and
     // every authorized request got a 500. If a future refactor adds them as
-    // statics too, that divergence is what let the bug hide — so assert the
+    // statics too, that divergence is what let the bug hide â€” so assert the
     // routes use the module form explicitly.
     expect(typeof svc.UpdateService, 'UpdateService object should still exist').toBe('object');
     expect(
       svc.UpdateService.getChannel,
-      'UpdateService.getChannel unexpectedly exists — if the routes were migrated to '
+      'UpdateService.getChannel unexpectedly exists â€” if the routes were migrated to '
       + 'the static form, this test and the routes must be reconciled deliberately.',
     ).toBeUndefined();
   });
@@ -351,7 +357,7 @@ describe('PHASE B — the module/static regression that caused Phase A', () => {
       /router\.(?:get|post|put)\(\s*'([^']+)'\s*,([^\n]*)/g,
     )].map((m) => ({ route: m[1], chain: m[2] }));
 
-    expect(registrations.length, 'no routes parsed — the scan is not seeing the file')
+    expect(registrations.length, 'no routes parsed â€” the scan is not seeing the file')
       .toBeGreaterThan(10);
 
     const unguarded = registrations

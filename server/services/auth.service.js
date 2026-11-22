@@ -14,86 +14,72 @@ class AuthService {
     this.auditRepo = new AuditRepository(conn);
   }
 
+  /**
+   * SUPABASE-ONLY LOGIN (production architecture).
+   *
+   * Supabase Auth (`signInWithPassword`) is the SOLE credential authority.
+   * There is NO local password verification and NO offline fallback:
+   *   - Supabase rejects the password          → 'Invalid credentials.'
+   *   - Supabase unreachable / not configured  → login FAILS (never proceeds
+   *     with a locally cached hash). Authentication REQUIRES connectivity.
+   *   - Supabase verifies                      → mirror the user's company /
+   *     agency/profile rows from the cloud into local SQLite (INSERT OR IGNORE
+   *     cache — the CRM keeps WORKING offline after login), then issue the
+   *     local JWT session.
+   *
+   * The local `users.password_hash` column is NEVER used to authenticate and
+   * is NO LONGER adopted/updated at login. Passwords live exclusively in
+   * Supabase Auth.
+   */
   async login(identifier, password) {
     if (!identifier || !password) {
       throw new AuthenticationError('Email/username and password are required.');
     }
 
-    // ── Cloud → Local sync (pre-verification pull) ──────────────────────────
-    // On a fresh customer install the local database is empty; the account was
-    // created by the Agency in Supabase. Before verifying credentials locally,
-    // attempt to mirror the user's company/agency/user rows down. Failure is
-    // non-fatal: an offline login still works against local data.
+    // Supabase MUST be reachable and configured — authentication never falls
+    // back to any local credential store.
+    const cloud = await this._verifyAgainstSupabase(identifier, password);
+
+    if (cloud === 'invalid') {
+      // Definitive rejection by Supabase Auth — fail fast, generic message.
+      console.warn('[auth] supabase rejected credentials for', identifier);
+      throw new AuthenticationError('Invalid credentials.');
+    }
+
+    if (cloud === 'unavailable') {
+      // Supabase unreachable or unconfigured. Login MUST fail — there is no
+      // local authentication fallback by design.
+      console.warn('[auth] login refused: Supabase unreachable/unconfigured for', identifier);
+      throw new AuthenticationError('Cannot sign in: the authentication service is unreachable. Check your internet connection and try again.');
+    }
+
+    // Cloud VERIFIED → sync the account/company down, then proceed with the
+    // (now-existing) local mirror row.
     try {
       const { syncUserCompanyFromCloud } = require('./cloudToLocalSync.service');
-      await syncUserCompanyFromCloud(this.conn, { email: identifier }, console);
+      const result = await syncUserCompanyFromCloud(this.conn, {
+        email: identifier,
+        supabaseUserId: cloud.userId,
+        accessToken: cloud.accessToken,
+      }, console);
+      console.log('[auth] cloud-first sync result:', result && result.synced, result && result.reason);
     } catch (e) {
-      console.warn('[auth] cloud->local sync skipped:', e.message);
+      console.warn('[auth] cloud-first sync failed:', e.message);
     }
 
-    // ── CLOUD-FIRST LOGIN (audit plan item 3) ───────────────────────────────
-    // Try Supabase Auth FIRST so credentials provisioned centrally (e.g. by
-    // the mother company for a brand-new machine) always work immediately:
-    //   * cloud VERIFIED → sync the account down, adopt the credential
-    //     locally, then proceed with the (now-existing) local user. This is
-    //     what makes a fresh install log in on the first try.
-    //   * cloud NOT verified (wrong password / unknown user / cloud
-    //     unreachable / offline / not configured) → fall through to the
-    //     local row. Local-only users (seeded admin, offline logins) must
-    //     keep working; with no local row either, the generic
-    //     'Invalid credentials' below still fires.
-    const localUserBeforeCloud = await this.userRepo.findByIdentifier(identifier);
-    if (!localUserBeforeCloud) {
-      console.warn('[auth] local lookup missed for', identifier, '— trying Supabase Auth first (fresh install path)');
-    }
-    const cloud = await this._verifyAgainstSupabase(identifier, password);
-    if (cloud && cloud !== 'invalid') {
-      try {
-        const { syncUserCompanyFromCloud } = require('./cloudToLocalSync.service');
-        const result = await syncUserCompanyFromCloud(this.conn, {
-          email: identifier,
-          supabaseUserId: cloud.userId,
-        }, console);
-        console.log('[auth] cloud-first sync result:', result && result.synced, result && result.reason);
-      } catch (e) {
-        console.warn('[auth] cloud-first sync failed:', e.message);
-      }
-    }
+    const email = String(identifier).trim().toLowerCase();
+    let user = await this.userRepo.findByIdentifier(email);
 
-    let user = await this.userRepo.findByIdentifier(identifier);
-
-    // Fresh-install safety net: no local row AND the cloud did not verify →
-    // nothing else to try.
     if (!user) {
-      console.warn('[auth] login failed for', identifier, '(no local row, cloud result:', (cloud === 'invalid' ? 'rejected' : cloud ? 'verified' : 'unreachable/unconfigured') + ')');
+      // Cloud verified but the local mirror failed: we cannot build a session
+      // for a user we have no local row for.
+      console.warn('[auth] login failed for', email, '(no local row after verified cloud login)');
       throw new AuthenticationError('Invalid credentials.');
     }
 
     if (user.status?.toUpperCase() !== 'ACTIVE') throw new AuthenticationError('Invalid credentials.');
 
     const hierarchyRole = resolveHierarchyRole(this.conn, user);
-
-    const isMatch = await PasswordService.verify(password, user.password_hash);
-    if (!isMatch) {
-      // Issue 2 companion fix: the local row may exist (created by a previous
-      // cloud sync) but carry an unusable/random hash because the password was
-      // only ever set in Supabase. Before rejecting, verify against Supabase;
-      // on success adopt the credential locally so future offline logins work.
-      // (cloud === 'invalid' here is definitive — the same password was just
-      // rejected by Supabase Auth for this email.)
-      const cloudOk = await this._verifyAgainstSupabase(user.email || identifier, password);
-      if (cloudOk && cloudOk !== 'invalid') {
-        const rehash = await PasswordService.hash(password);
-        this.conn.run('UPDATE users SET password_hash = ?, supabase_user_id = COALESCE(supabase_user_id, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-          [rehash, cloudOk.userId, user.id]);
-      } else {
-        this.auditRepo.log({
-          id: generateId('aud'), company_id: user.company_id, user_id: user.id,
-          action: 'USER_LOGIN_FAILED', entity_type: 'USER', entity_id: user.id
-        });
-        throw new AuthenticationError('Invalid credentials.');
-      }
-    }
 
     const withRoles = this.userRepo.getUserWithRoles(user.id) || { roles: [], permissions: [] };
     let permissions = withRoles.permissions || [];
@@ -182,41 +168,42 @@ class AuthService {
     };
   }
 
-  /**
-   * ISSUE 2 — Supabase Auth credential verification fallback.
+/**
+   * Supabase Auth credential verification — THE ONLY check.
    *
-   * Called only when the local SQLite lookup misses (fresh install). Uses the
-   * Supabase Auth password grant (`signInWithPassword`) with the ANON/public
-   * key path handled by the configured client. Returns
-   * `{ ok: true, userId }` on success, `{ ok: false }` on any failure
-   * (wrong password, unknown user, cloud unreachable) — never throws.
+   * Uses `signInWithPassword` with the ANON key (no service role in desktop
+   * builds). Returns:
+   *   { userId }        — cloud verified
+   *   'invalid'         — Supabase definitively rejected the credentials
+   *   'unavailable'     — Supabase unreachable / unconfigured (login FAILS —
+   *                       there is NO offline fallback in the Supabase-only
+   *                       architecture)
    */
   async _verifyAgainstSupabase(identifier, password) {
     try {
       const { isConfigured, getSupabaseClient } = require('../config/supabase');
       if (!isConfigured()) {
-        console.warn('[auth] supabase fallback skipped: not configured');
-        return null;
+        console.warn('[auth] supabase check skipped: not configured (SUPABASE_ANON_KEY missing)');
+        return 'unavailable';
       }
       const sb = getSupabaseClient();
       const email = String(identifier).trim().toLowerCase();
-      // signInWithPassword is the definitive credential check — it validates
-      // against Supabase Auth without granting this server any session it
-      // would need to keep (persistSession is disabled in the client config).
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
       if (error || !data || !data.user) {
-        // Distinguish 'wrong credentials' from 'cloud unreachable': only the
-        // former is a definitive rejection the caller may fail fast on.
         const msg = String((error && (error.message || error.code)) || '').toLowerCase();
         const definitive = msg.includes('invalid login credentials') || msg.includes('invalid credentials');
         console.warn('[auth] supabase credential check failed:', error && (error.message || error.code));
-        return definitive ? 'invalid' : null;
+        return definitive ? 'invalid' : 'unavailable';
       }
       console.log('[auth] supabase credential check OK for', email);
-      return { userId: data.user.id };
+      // Return the session access token too: with the ANON key the only way a
+      // desktop client may read RLS-protected rows is by authenticating AS the
+      // user (Authorization: Bearer <token>). RLS then resolves auth.uid() to
+      // this user and exposes exactly their own tenant rows.
+      return { userId: data.user.id, accessToken: data.session ? data.session.access_token : null };
     } catch (e) {
-      console.warn('[auth] supabase fallback threw:', e.message);
-      return null;
+      console.warn('[auth] supabase check threw:', e.message);
+      return 'unavailable';
     }
   }
 
@@ -240,10 +227,20 @@ class AuthService {
   }
 
   /**
-   * CREATE FIRST USER — one-time bootstrap for an empty deployment.
-   * Rejected with 409 the moment any user exists.
+   * CREATE FIRST USER — DISABLED in the Supabase-only architecture.
+   *
+   * The route handler (routes/auth.js) already rejects this with 403
+   * SETUP_DISABLED; the guard here is defence in depth. Accounts are
+   * provisioned centrally in Supabase and mirrored down at first login — the
+   * desktop client must never create credential-bearing local users.
    */
-  async createFirstUser({ fullName, email, password }) {
+  async createFirstUser() {
+    const e = new ValidationError('Local account registration is disabled. Your account is created by the Agency in Supabase.');
+    e.status = 403;
+    throw e;
+  }
+
+  async _createFirstUserLegacy({ fullName, email, password }) {
     const existing = this.conn.get('SELECT COUNT(*) AS n FROM users');
     if (existing && Number(existing.n) > 0) {
       const e = new ValidationError('Setup already completed — a user already exists.');
@@ -330,20 +327,38 @@ class AuthService {
     const user = this.userRepo.findById(userId, context.companyId);
     if (!user) throw new NotFoundError('User', userId);
 
-    if (context.userId === userId) {
-      const ok = await PasswordService.verify(oldPassword, user.password_hash);
-      if (!ok) throw new AuthenticationError('Current password is incorrect.');
+    // SUPABASE-ONLY password change: the cloud is the sole credential
+    // authority. The current password is verified IN SUPABASE and the new one
+    // is written THERE. No local hash is computed or stored — the local
+    // `users.password_hash` column is no longer a credential.
+    let cloudUpdated = false;
+    {
+      const { isConfigured, getSupabaseClient } = require('../config/supabase');
+      if (!isConfigured()) {
+        throw new Error('Cannot change password: the authentication service is not configured on this machine.');
+      }
+      const sb = getSupabaseClient();
+      const email = String(user.email).trim().toLowerCase();
+      // Verify the current password in the cloud (this also gives us the
+      // access token needed for updateUserById-less self password change).
+      const { data: signIn, error: signInErr } = await sb.auth.signInWithPassword({ email, password: oldPassword });
+      if (signInErr || !signIn || !signIn.session) {
+        throw new AuthenticationError('Current password is incorrect.');
+      }
+      const { error: updErr } = await sb.auth.updateUser(
+        { password: newPassword },
+        { token: signIn.session.access_token }
+      );
+      if (updErr) throw new Error('Cloud password update failed: ' + updErr.message);
+      cloudUpdated = true;
     }
-
-    const hash = await PasswordService.hash(newPassword);
-    this.userRepo.updateUser(userId, context.companyId, { password_hash: hash });
 
     this.auditRepo.log({
       id: generateId('aud'), company_id: context.companyId, user_id: context.userId,
-      action: 'PASSWORD_CHANGED', entity_type: 'USER', entity_id: userId,
+      action: 'PASSWORD_CHANGED_CLOUD', entity_type: 'USER', entity_id: userId,
       session_id: context.sessionId
     });
-    return { success: true };
+    return { success: true, cloudSynced: cloudUpdated };
   }
 
   updateProfile(userId, companyId, data) {

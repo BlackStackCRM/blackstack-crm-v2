@@ -49,4 +49,35 @@ router.post('/setup/first-user', (req, res) => {
   ));
 });
 
+// SUPABASE-FIRST PASSWORD RECOVERY.
+//
+// Sends the Supabase Auth reset email. The link opens Supabase's hosted reset
+// page (or the app's deep link if configured); setting the new password happens
+// in Supabase Auth, and the next login syncs the credential into the local
+// cache. Always responds with success:true regardless of whether the address
+// exists, so the endpoint cannot be used to enumerate accounts.
+router.post('/recover', async (req, res) => {
+  const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    return res.status(400).json(errorResponse('VALIDATION', 'A valid email address is required.'));
+  }
+  try {
+    const { isConfigured, getSupabaseClient } = require('../config/supabase');
+    if (!isConfigured()) {
+      return res.status(503).json(errorResponse('CLOUD_UNCONFIGURED', 'Password recovery is unavailable: cloud authentication is not configured on this machine.'));
+    }
+    const sb = getSupabaseClient();
+    const redirectTo = process.env.SUPABASE_RESET_REDIRECT_URL || undefined;
+    const { error } = await sb.auth.resetPasswordForEmail(email, redirectTo ? { redirectTo } : {});
+    if (error) {
+      console.warn('[auth] recovery email failed:', error.message);
+      return res.status(502).json(errorResponse('CLOUD_ERROR', 'Could not send the recovery email. Please try again shortly.'));
+    }
+    return res.json(successResponse({ sent: true }));
+  } catch (e) {
+    console.warn('[auth] recovery endpoint threw:', e.message);
+    return res.status(502).json(errorResponse('CLOUD_ERROR', 'Could not send the recovery email. Please try again shortly.'));
+  }
+});
+
 module.exports = router;
