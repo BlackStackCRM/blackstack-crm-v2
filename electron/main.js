@@ -11,10 +11,11 @@
  *    pre-update verified backup before install
  *  - Graceful shutdown: stop server, close DB, quit
  */
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { syncSupabaseCredentialsIntoEnv } = require('./env-sync');
 
 // ── FIRST-LAUNCH CONFIGURATION BOOTSTRAP ────────────────────────────────────
 //
@@ -42,35 +43,17 @@ function ensureLocalRuntimeConfig(userDataDir, log) {
       const envPath = path.join(dataDir, '.env');
       if (fs.existsSync(envPath)) {
         const text = fs.readFileSync(envPath, 'utf8');
-        const readVar = (name) => {
-          const m = text.match(new RegExp('^\\s*' + name + '\\s*=\\s*(.*)\\s*$', 'm'));
-          return m ? m[1].trim().replace(/^"|"$/g, '').replace(/^'|'$/g, '') : '';
-        };
-        if (!readVar('SUPABASE_URL') || !readVar('SUPABASE_ANON_KEY')) {
-          const packagedEnv = path.join(path.dirname(process.execPath), '..', 'resources', 'blackstack.env');
-          const altPackagedEnv = path.join(path.dirname(process.execPath), 'resources', 'blackstack.env');
-          const source = [packagedEnv, altPackagedEnv].find((p) => fs.existsSync(p));
-          if (source) {
-            const packaged = {};
-            for (const line of fs.readFileSync(source, 'utf8').split(/\r?\n/)) {
-              const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-              if (m) packaged[m[1]] = m[2].trim().replace(/^"|"$/g, '').replace(/^'|'$/g, '');
-            }
-            let patched = text;
-            for (const name of ['SUPABASE_URL', 'SUPABASE_ANON_KEY']) {
-              const value = packaged[name] || '';
-              if (!value) continue;
-              if (new RegExp('^\\s*' + name + '\\s*=', 'm').test(patched)) {
-                patched = patched.replace(new RegExp('^\\s*' + name + '\\s*=\\s*.*$', 'm'), `${name}=${value}`);
-              } else {
-                patched += `\n${name}=${value}`;
-              }
-            }
-            fs.writeFileSync(envPath, patched, { encoding: 'utf8' });
-            log('Patched missing Supabase credentials into existing env from: ' + source);
-          } else {
-            log('Existing env is missing Supabase credentials and no packaged blackstack.env was found');
-          }
+        const packagedEnv = path.join(path.dirname(process.execPath), '..', 'resources', 'blackstack.env');
+        const altPackagedEnv = path.join(path.dirname(process.execPath), 'resources', 'blackstack.env');
+        const packagedSource = [packagedEnv, altPackagedEnv].find((p) => fs.existsSync(p));
+        const result = syncSupabaseCredentialsIntoEnv(text, packagedSource);
+        if (result.changed) {
+          fs.writeFileSync(envPath, result.patched, { encoding: 'utf8' });
+          log('Synchronized Supabase credentials into existing env from: ' + packagedSource);
+        } else if (packagedSource) {
+          log('Supabase credentials already in sync with packaged env: ' + packagedSource);
+        } else {
+          log('No packaged blackstack.env found; keeping existing runtime credentials.');
         }
       }
     } catch (e) {
@@ -855,6 +838,24 @@ function setupAutoUpdate() {
     return { ok: true };
   });
 
+  // ── P2 SECURE SESSION IPC (audit §26.2 R5) ─────────────────────────────
+  // Refresh token persistence via safeStorage. The plaintext token NEVER
+  // crosses the IPC boundary back to the renderer: the renderer hands the
+  // token IN after a successful cloud login and later asks only for a
+  // boolean "has session". session:get returns the token to the MAIN-process
+  // auth helper only (same-process consumption), never across IPC.
+  const secureSession = require(path.join(__dirname, 'secure-session-store'));
+  ipcMain.handle('session:save', (_e, refreshToken) => {
+    if (typeof refreshToken !== 'string' || refreshToken.length < 10) return { ok: false, reason: 'INVALID' };
+    return { ok: secureSession.saveRefreshToken({ app, safeStorage }, refreshToken).stored };
+  });
+  ipcMain.handle('session:has', () => {
+    return { ok: true, has: Boolean(secureSession.loadRefreshToken({ app, safeStorage })) };
+  });
+  ipcMain.handle('session:clear', () => {
+    return { ok: secureSession.clearRefreshToken({ app, safeStorage }) };
+  });
+
   // Phase 3: channel get/set over IPC (used by Settings → Updates).
   ipcMain.handle('app:getChannel', () => {
     try { return { ok: true, channel: require(path.join(__dirname, '../server/services/updateService')).getChannel() }; }
@@ -916,4 +917,4 @@ function setupAutoUpdate() {
     } catch { /* noop */ }
   });
 }
-module.exports = {};
+module.exports = { syncSupabaseCredentialsIntoEnv };

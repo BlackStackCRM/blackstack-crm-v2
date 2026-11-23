@@ -254,6 +254,12 @@ function createDisposableDb(opts = {}) {
   // has open and refuses unless it is inside this temp directory.
   assertDisposableDbIsActive({ suite, tmpDir, expected: dbPath });
 
+  // STALE TEMP SWEEP (incident 2026-11-23 — 343 orphaned bscrm-* dirs, ~3 GB):
+  // hard-killed test runs bypass every in-process cleanup handler, so the
+  // NEXT run sweeps leftovers. Daily-throttled, grace-protected (active
+  // test dirs are never touched), fully non-fatal.
+  try { require('./temp-dir-hygiene').maybeSweepTempDirs(); } catch { /* never fatal */ }
+
   const cleanup = () => {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best effort */ }
   };

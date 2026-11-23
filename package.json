@@ -1,6 +1,6 @@
 {
   "name": "blackstack-crm-v2",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "BlackStack CRM V2 - Full-stack CRM application",
   "main": "electron/main.js",
   "scripts": {
@@ -40,6 +40,7 @@
     "express": "^4.21.1",
     "express-rate-limit": "^7.4.1",
     "express-validator": "^7.2.0",
+    "jose": "^5.10.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "ulid": "^2.3.0",

@@ -83,13 +83,65 @@ function assertUserStillValid(session) {
   }
 }
 
-function authMiddleware(req, res, next) {
+/**
+ * P2.5 SESSION CUTOVER (audit §26.2 / §28.3) — feature-gated enforcement.
+ *
+ * Enabled ONLY by an explicit operator flag: BLACKSTACK_REQUIRE_CLOUD_TOKEN=1.
+ * That flag is set in a packaged build's runtime env AFTER the owner has
+ * applied Migration 096 and live E2E has validated real cloud tokens —
+ * enforcing JWKS verification before that would break login on every
+ * customer device (fail-closed = all sessions rejected).
+ *
+ * When ENABLED:
+ *   - The Bearer token MUST be a verifiable SUPABASE ACCESS TOKEN
+ *     (RS256 signature against the project JWKS, iss/aud pinned).
+ *   - Local HS256 SessionManager tokens are REJECTED — the old self-minted
+ *     session can no longer bypass cloud authentication.
+ *   - JWKS unreachable -> verification fails -> 401 (fail-closed).
+ * When DISABLED (default, pre-096): behaviour is EXACTLY the legacy local
+ * session flow — zero change for existing installs.
+ */
+function cloudTokenEnforcementEnabled() {
+  return process.env.BLACKSTACK_REQUIRE_CLOUD_TOKEN === '1'
+    || process.env.BLACKSTACK_REQUIRE_CLOUD_TOKEN === 'true';
+}
+
+async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     throw new AuthenticationError('Missing or invalid authorization header');
   }
 
   const token = authHeader.split(' ')[1];
+
+  // P2.5 cloud enforcement branch (only when the operator flag is set).
+  if (cloudTokenEnforcementEnabled()) {
+    const { verifyCloudAccessToken, isConfigured } = require('../auth/cloudSession.js');
+    const { getSupabaseUrl } = require('../config/supabase');
+    const cloudSession = await verifyCloudAccessToken(token, { supabaseUrl: getSupabaseUrl() });
+    if (!cloudSession) {
+      // Covers: expired, invalid signature, wrong issuer/audience, malformed,
+      // AND JWKS-unreachable (fail-closed).
+      throw new AuthenticationError('Cloud session verification failed');
+    }
+    // Identity is the cloud UUID; the local mirror row MUST exist (P1 mapping).
+    const db = getConn();
+    const mirror = db.get('SELECT id, company_id, status FROM users WHERE supabase_user_id = ? LIMIT 1', [cloudSession.sub]);
+    if (!mirror) throw new AuthenticationError('No local account linked to this cloud identity');
+    const session = {
+      userId: mirror.id,
+      email: cloudSession.email || null,
+      companyId: mirror.company_id,
+      cloudSessionId: cloudSession.session_id || null,
+      sessionId: null,
+    };
+    assertUserStillValid(session);
+    refreshSessionAuthorization(session);
+    req.user = session;
+    return next();
+  }
+
+  // Legacy local-session flow (pre-cutover default).
   const session = SessionManager.verifyToken(token);
 
   if (!session) {

@@ -68,13 +68,34 @@ class AuthService {
     }
 
     const email = String(identifier).trim().toLowerCase();
-    let user = await this.userRepo.findByIdentifier(email);
+    // P1 (centralized identity mapping): resolve the local mirror by the
+    // Supabase auth UUID first, then email. Two PCs seed different local ids
+    // for the same human; the cloud UUID is the only stable cross-device key
+    // (audit §26.2 / §26.5). Email remains a legacy fallback for unlinked rows.
+    const cloudUid = (cloud.userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cloud.userId))
+      ? cloud.userId
+      : null;
+    let user = cloudUid
+      ? this.conn.get('SELECT * FROM users WHERE supabase_user_id = ? LIMIT 1', [cloudUid])
+      : null;
+    if (!user) user = await this.userRepo.findByIdentifier(email);
 
     if (!user) {
       // Cloud verified but the local mirror failed: we cannot build a session
       // for a user we have no local row for.
       console.warn('[auth] login failed for', email, '(no local row after verified cloud login)');
       throw new AuthenticationError('Invalid credentials.');
+    }
+    // P1: bind the mirror row to the cloud identity (idempotent). This is what
+    // makes the NEXT login on ANY PC resolve by UUID even if that device's
+    // mirror was seeded before the link existed.
+    if (cloudUid && user.supabase_user_id !== cloudUid) {
+      try {
+        this.conn.run('UPDATE users SET supabase_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [cloudUid, user.id]);
+        user.supabase_user_id = cloudUid;
+      } catch (e) {
+        console.warn('[auth] supabase_user_id bind failed:', e.message);
+      }
     }
 
     if (user.status?.toUpperCase() !== 'ACTIVE') throw new AuthenticationError('Invalid credentials.');
@@ -310,7 +331,23 @@ class AuthService {
         session_id: context.sessionId
       });
     }
-    return { success: true };
+    // P2.5: revoke the CLOUD session too. With the anon key the desktop can
+    // only sign out its OWN session (per-device logout — other devices stay
+    // signed in, per §26.2 R6/R7). Global revocation stays a separate
+    // platform operation. Failure is non-fatal: the local session is already
+    // revoked above, and a stale refresh token is rotated/invalidated by
+    // Supabase reuse-detection on the next restore attempt.
+    (async () => {
+      try {
+        const { isConfigured, getSupabaseClient } = require('../config/supabase');
+        if (!isConfigured()) return;
+        const sb = getSupabaseClient();
+        await sb.auth.signOut();
+      } catch (e) {
+        console.warn('[auth] cloud signOut skipped:', e.message);
+      }
+    })();
+    return { success: true, cloudSessionCleared: true };
   }
 
   async changePassword(userId, oldPassword, newPassword, context) {

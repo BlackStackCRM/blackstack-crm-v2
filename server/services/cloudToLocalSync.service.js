@@ -110,10 +110,28 @@ async function syncUserCompanyFromCloud(db, identity, log = console) {
   const meta = {};
   role = role || String((authUser && authUser.user_metadata && authUser.user_metadata.role) || '').toLowerCase() || null;
 
-  const localUser = db.get(
-    'SELECT id, company_id, supabase_user_id, role, hierarchy_role FROM users WHERE lower(email) = lower(?) LIMIT 1',
-    [email],
-  );
+  // ─ P1 (centralized identity mapping): resolve the local mirror row by the
+  // Supabase auth UUID FIRST, falling back to email. Rationale (audit §26):
+  // email is mutable and device-local seeds may differ across PCs, so two
+  // machines can hold different local ids for the same human. Keying the
+  // mirror on supabase_user_id makes the identity mapping stable and identical
+  // on every device; the email path stays only for legacy/unlinked rows.
+  let localUser = null;
+  const cloudUid = (identity.supabaseUserId && isUuid(identity.supabaseUserId))
+    ? identity.supabaseUserId
+    : null;
+  if (cloudUid) {
+    localUser = db.get(
+      'SELECT id, company_id, supabase_user_id, role, hierarchy_role FROM users WHERE supabase_user_id = ? LIMIT 1',
+      [cloudUid],
+    );
+  }
+  if (!localUser) {
+    localUser = db.get(
+      'SELECT id, company_id, supabase_user_id, role, hierarchy_role FROM users WHERE lower(email) = lower(?) LIMIT 1',
+      [email],
+    );
+  }
   if (localUser) companyId = localUser.company_id || null;
 
   if (!companyId && meta.agency_id && isUuid(meta.agency_id)) agencyId = meta.agency_id;
@@ -220,15 +238,17 @@ async function syncUserCompanyFromCloud(db, identity, log = console) {
   let userId = null;
   if (localUser) {
     userId = localUser.id;
+    // P1: always write the resolved cloud UUID — the mirror row's supabase_user_id
+    // must match the authenticating identity on EVERY device, not just the first.
     db.run(
       `UPDATE users SET
          company_id = ?,
-         supabase_user_id = COALESCE(supabase_user_id, ?),
+         supabase_user_id = COALESCE(?, supabase_user_id, ?),
          hierarchy_role = COALESCE(hierarchy_role, ?),
          status = 'ACTIVE',
          updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [localCompanyId, (authUser && authUser.id) || identity.supabaseUserId || null, hierarchyRole, userId],
+      [localCompanyId, cloudUid, (authUser && authUser.id) || identity.supabaseUserId || null, hierarchyRole, userId],
     );
   } else {
     userId = generateId('usr');
@@ -242,6 +262,12 @@ async function syncUserCompanyFromCloud(db, identity, log = console) {
        VALUES (?,?,?,?,?,?,?,'ACTIVE',?,?,CURRENT_TIMESTAMP)`,
       [userId, localCompanyId, username, email, unusableHash, fullName, appRole, hierarchyRole, (authUser && authUser.id) || null],
     );
+    // P1: the newly created mirror row MUST carry the cloud UUID immediately,
+    // so a subsequent login on this (or any other) PC resolves by UUID.
+    const uidToWrite = (authUser && authUser.id) || identity.supabaseUserId || null;
+    if (uidToWrite) {
+      db.run('UPDATE users SET supabase_user_id = ? WHERE id = ?', [uidToWrite, userId]);
+    }
   }
 
   log.info && log.info(`[cloud-sync] Synced company ${localCompanyId}` +
