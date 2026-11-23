@@ -22,6 +22,13 @@ class Topbar {
     this.attachEvents();
   }
 
+  // Re-render the user menu after session validation so cached localStorage
+  // data is refreshed with the server-validated profile.
+  refresh() {
+    this.renderUserMenu();
+    this.renderNotifications();
+  }
+
   renderUserMenu() {
     if (!this.userContainer) return;
     const user = AuthAPI.getUser();

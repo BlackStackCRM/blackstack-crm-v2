@@ -156,9 +156,8 @@ window.PageModules.dashboard = {
     } catch (err) {
       const status = err && (err.status || err.statusCode);
       const msg = (err && (err.message || err.error)) || 'Unknown error';
-      if (status === 401 || status === 429) {
-        // The API client handles invalid bearer tokens and rate-limit notices.
-        // Do not turn transient 429s or non-token 401s into another redirect.
+      if (status === 401 && /invalid or expired token/i.test(err.message || '')) {
+        // Token is invalid — the API client already cleared session and redirected to login.
         return;
       }
       ErrorState.render(

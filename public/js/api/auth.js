@@ -60,8 +60,38 @@ const AuthAPI = {
     return window.API.put('/auth/profile/password', { oldPassword, newPassword });
   },
 
+  // Validate the stored JWT against the Express server. Token existence alone
+  // never means authenticated — the server must confirm the token is still
+  // valid and the account still exists/active. Returns the profile on success,
+  // throws on invalid/expired/missing token or server error.
+  async validateSession() {
+    const token = localStorage.getItem('crm_token');
+    if (!token) {
+      const error = new Error('No authentication token');
+      error.status = 401;
+      error.code = 'MISSING_TOKEN';
+      throw error;
+    }
+    try {
+      const profile = await this.getProfile();
+      const user = (profile && profile.data) ? profile.data : (profile || {});
+      localStorage.setItem('crm_user', JSON.stringify(user));
+      return user;
+    } catch (err) {
+      // Clear stale authentication state on any validation failure.
+      this.clearSession();
+      throw err;
+    }
+  },
+
+  clearSession() {
+    localStorage.removeItem('crm_token');
+    localStorage.removeItem('crm_user');
+    this._clearSessionCookie();
+  },
+
   isAuthenticated() {
-    return !!localStorage.getItem('crm_token');
+    return !!localStorage.getItem('crm_token') && !!localStorage.getItem('crm_user');
   },
 
   getUser() {

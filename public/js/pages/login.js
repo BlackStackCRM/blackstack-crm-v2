@@ -28,14 +28,23 @@
     return s;
   };
 
-  // ── Setup mode RETIRED · SUPABASE-ONLY AUTH ─────────────────────────
-  //
-  // Local account/company registration is disabled: customer accounts are
-  // provisioned centrally by the Agency through Supabase and synced down to
-  // the local SQLite database at login. Supabase Auth is the SOLE credential
-  // authority — there is NO offline fallback, so login requires an internet
-  // connection. Any stale retry-redirect reason is still surfaced.
-  (async function detectSetupMode() {
+  // ── Login page protection ────────────────────────────────────────────────
+  // If the user already has a valid server-verified session, redirect to the
+  // dashboard instead of showing the login screen. A stale/invalid token is
+  // cleared so the login form appears.
+  (async function ensureCorrectAuthState() {
+    try {
+      const user = await AuthAPI.validateSession();
+      if (user) {
+        const redirect = sessionStorage.getItem('redirectAfterLogin') || '/index.html#dashboard';
+        sessionStorage.removeItem('redirectAfterLogin');
+        window.location.href = redirect;
+        return;
+      }
+    } catch {
+      // validateSession() already clears stale state on failure
+    }
+
     // FIX (stale-permission recovery): if we were redirected here by the API
     // interceptor (401/403 after a server-side permission fix), show WHY so
     // the user understands the re-login instead of a silent bounce.

@@ -59,17 +59,22 @@ class Sidebar {
   }
 
   async init() {
-    await this.refreshProfile();
     this.render();
     this.attachEvents();
     this.updateUser();
   }
 
-  async refreshProfile() {
+  // Refresh the authenticated user profile from the server. If a pre-fetched
+  // profile is supplied (e.g. from validateSession()), use it directly to
+  // avoid a duplicate network request. On failure, clear stale auth state and
+  // redirect to login.
+  async refreshProfile(preFetchedProfile) {
     try {
-      const profile = await AuthAPI.getProfile();
+      const profile = preFetchedProfile || await AuthAPI.getProfile();
       const user = profile || {};
       localStorage.setItem('crm_user', JSON.stringify(user));
+      this.render();
+      this.updateUser();
     } catch {
       localStorage.removeItem('crm_token');
       localStorage.removeItem('crm_user');

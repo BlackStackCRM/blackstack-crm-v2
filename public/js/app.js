@@ -98,11 +98,25 @@
   async function init() {
     const pathname = window.location.pathname;
     if (pathname.endsWith('login.html') || pathname === '/login') return;
-    // The sidebar refreshes the authoritative profile before rendering. Wait
-    // for that refresh so a stale cached hierarchyRole cannot briefly open an
-    // Agency Control page with controls from the previous role.
-    if (sidebar && sidebar.ready) await sidebar.ready;
-    if (!AuthAPI.isAuthenticated()) {
+
+    // Validate the stored JWT against the Express server before loading any
+    // protected route. Token existence alone never means authenticated.
+    let authenticated = false;
+    try {
+      const profile = await AuthAPI.validateSession();
+      authenticated = true;
+      // Refresh topbar with server-validated user data
+      if (topbar) topbar.refresh();
+      // Synchronize sidebar profile from the validated session (avoids a
+      // duplicate /api/auth/profile request).
+      if (sidebar && typeof sidebar.refreshProfile === 'function') {
+        await sidebar.refreshProfile(profile);
+      }
+    } catch {
+      authenticated = false;
+    }
+
+    if (!authenticated) {
       window.location.href = '/login.html';
       return;
     }
