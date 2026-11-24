@@ -222,8 +222,26 @@ class DatabaseConnection {
     } catch (error) {
       try { this.db.close(); } catch { /* preserve the original connection error */ }
       this.db = null;
+      // DISK I/O ERROR DIAGNOSTIC (2026-11-24 incident): SQLITE_IOERR at WAL
+      // setup is almost always a storage-level problem — disk nearly full,
+      // write blocked by security software, or the volume offline — not a
+      // permission problem on the .db file itself. Report the free space of
+      // the volume holding the database and the SQLite error code so the
+      // operator sees the REAL cause instead of a generic writability hint.
+      // No customer data is included in this message.
+      let diskHint = '';
+      try {
+        const stats = fs.statfsSync(path.parse(DB_PATH).root);
+        const freeMb = Math.round(stats.bavail * stats.bsize / (1024 * 1024));
+        if (freeMb < 1024) {
+          diskHint = ` Free space on the database volume is only ${freeMb} MB — WAL mode needs room to write. Free up disk space and restart.`;
+        } else {
+          diskHint = ` Free space on the database volume: ${freeMb} MB.`;
+        }
+      } catch { /* statfs unsupported — omit the hint */ }
       const wrapped = new Error(
-        `Cannot prepare shared CRM database at ${DB_PATH}. The file and its folder must be writable for WAL mode. ${error.message}`,
+        `Cannot prepare shared CRM database at ${DB_PATH}. The file and its folder must be writable for WAL mode.` +
+        `${diskHint} SQLite error: ${error.code || 'unknown'} ${error.message}`,
       );
       wrapped.cause = error;
       throw wrapped;

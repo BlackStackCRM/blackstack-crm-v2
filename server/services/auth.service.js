@@ -49,8 +49,34 @@ class AuthService {
     if (cloud === 'unavailable') {
       // Supabase unreachable or unconfigured. Login MUST fail — there is no
       // local authentication fallback by design.
-      console.warn('[auth] login refused: Supabase unreachable/unconfigured for', identifier);
-      throw new AuthenticationError('Cannot sign in: the authentication service is unreachable. Check your internet connection and try again.');
+      // DIAGNOSTIC SPLIT (2026-11-24, second-PC investigation): 'unavailable'
+      // covers two very different conditions. A MISSING configuration (empty
+      // SUPABASE_URL / SUPABASE_ANON_KEY in the runtime .env) is a local
+      // setup defect — no request ever leaves the machine — while a genuine
+      // network failure at least attempted a request. Telling them apart in
+      // the user-facing message stops operators chasing a network problem
+      // that does not exist (the second PC reported exactly this message
+      // while its network was fine). No secrets are exposed.
+      const configured = (() => {
+        try {
+          // Re-read from disk: the packaged app patches the runtime .env at
+          // startup, so in-memory process.env may predate the repair.
+          const envPath = process.env.BLACKSTACK_ENV_PATH;
+          if (envPath) {
+            const text = require('fs').readFileSync(envPath, 'utf8');
+            const readVar = (name) => {
+              const m = text.match(new RegExp('^\\s*' + name + '\\s*=\\s*(.*)\\s*$', 'm'));
+              return m ? m[1].trim() : '';
+            };
+            return Boolean(readVar('SUPABASE_URL')) && Boolean(readVar('SUPABASE_ANON_KEY'));
+          }
+        } catch { /* fall back to process.env */ }
+        try { return require('../config/supabase').isConfigured(); } catch { return false; }
+      })();
+      console.warn('[auth] login refused:', configured ? 'Supabase unreachable' : 'Supabase not configured (credentials missing in runtime env)', 'for', identifier);
+      throw new AuthenticationError(configured
+        ? 'Cannot sign in: the authentication service is unreachable. Check your internet connection and try again.'
+        : 'Cannot sign in: this installation is missing its Supabase configuration. Reinstall or repair the application so the packaged credentials are restored, then try again.');
     }
 
     // Cloud VERIFIED → sync the account/company down, then proceed with the

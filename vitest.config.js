@@ -9,6 +9,11 @@ export default defineConfig({
       'tests/**/*.e2e.test.js',
       // These files use Node's built-in test runner and are invoked by
       // `npm run test:native`, not collected by Vitest.
+      // auth-failure-diagnosis + runtime-env-repair run as plain node scripts
+      // (they manage their own env isolation; vitest's shared worker would
+      // leak their process.env mutations across suites).
+      'tests/auth-failure-diagnosis.test.js',
+      'tests/runtime-env-repair.test.js',
       'tests/audit-opening-balance.test.js',
       'tests/create-ledger-account.regression.test.js',
       'tests/update-account-is-group.test.js',

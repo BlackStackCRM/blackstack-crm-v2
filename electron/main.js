@@ -16,6 +16,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { syncSupabaseCredentialsIntoEnv } = require('./env-sync');
+const { resolveRuntimeEnvPath, findPackagedEnvPath } = require('./runtime-env-path');
 
 // ── FIRST-LAUNCH CONFIGURATION BOOTSTRAP ────────────────────────────────────
 //
@@ -33,28 +34,51 @@ const { syncSupabaseCredentialsIntoEnv } = require('./env-sync');
 function ensureLocalRuntimeConfig(userDataDir, log) {
   const pointerFile = path.join(userDataDir, 'shared-env-path.txt');
   if (fs.existsSync(pointerFile)) {
-    // REPAIR PATH (System 2 fix): machines that first ran an older build may
-    // already have a runtime .env with EMPTY Supabase credentials — the pointer
-    // exists, so the fresh-install branch below never ran again and every
-    // upgrade kept failing with 'Invalid credentials'. When the existing env
-    // lacks the keys, patch them in from the packaged 'blackstack.env'.
+    // REPAIR PATH (v1.2.4 permanent fix): the runtime .env the SERVER actually
+    // uses is whatever shared-env-path.txt (or BLACKSTACK_ENV_PATH) points at —
+    // NOT necessarily %APPDATA%\blackstack-crm-v2\data\.env. Earlier builds
+    // hardcoded that AppData path here, so a machine whose pointer names a
+    // custom shared data directory (e.g. C:\BlackStackData\.env) got its
+    // repair applied to the wrong file and login kept failing with a misleading
+    // network error. resolveRuntimeEnvPath() uses the SAME authoritative order
+    // as the server (explicitPath > pointer > marker > cwd/app/project), so the
+    // repair always lands in the exact file the running server reads.
     try {
-      const dataDir = path.join(app.getPath('appData'), 'blackstack-crm-v2', 'data');
-      const envPath = path.join(dataDir, '.env');
-      if (fs.existsSync(envPath)) {
-        const text = fs.readFileSync(envPath, 'utf8');
-        const packagedEnv = path.join(path.dirname(process.execPath), '..', 'resources', 'blackstack.env');
-        const altPackagedEnv = path.join(path.dirname(process.execPath), 'resources', 'blackstack.env');
-        const packagedSource = [packagedEnv, altPackagedEnv].find((p) => fs.existsSync(p));
-        const result = syncSupabaseCredentialsIntoEnv(text, packagedSource);
-        if (result.changed) {
-          fs.writeFileSync(envPath, result.patched, { encoding: 'utf8' });
-          log('Synchronized Supabase credentials into existing env from: ' + packagedSource);
-        } else if (packagedSource) {
-          log('Supabase credentials already in sync with packaged env: ' + packagedSource);
-        } else {
-          log('No packaged blackstack.env found; keeping existing runtime credentials.');
-        }
+      const resolved = resolveRuntimeEnvPath({
+        explicitPath: process.env.BLACKSTACK_ENV_PATH,
+        userDataDir,
+        appPath: app.getAppPath(),
+      });
+      const envPath = resolved.envPath;
+      log('Runtime env resolution: ' + envPath + ' (source: ' + resolved.source + ', exists: ' + resolved.exists + ')');
+      const packagedSource = findPackagedEnvPath();
+      if (!packagedSource) {
+        log('No packaged blackstack.env found; keeping existing runtime credentials.');
+        return; // pointer already set — provisioning not needed
+      }
+      if (!fs.existsSync(envPath)) {
+        // The authoritative location is DECLARED but missing (deleted .env or a
+        // fresh custom shared-data directory). Provision the packaged
+        // credentials there so the next server boot resolves a complete env.
+        const packagedText = fs.readFileSync(packagedSource, 'utf8');
+        const provision = ['PORT=3000', 'JWT_EXPIRY=7d', 'CORS_ORIGIN=*', 'DEMO_MODE=false'];
+        // Preserve packaged Supabase values (URL + ANON key) and nothing secret:
+        const url = (packagedText.match(/^SUPABASE_URL=(.*)$/m) || [, ''])[1].trim();
+        const anon = (packagedText.match(/^SUPABASE_ANON_KEY=(.*)$/m) || [, ''])[1].trim();
+        if (url) provision.push('SUPABASE_URL=' + url);
+        if (anon) provision.push('SUPABASE_ANON_KEY=' + anon);
+        fs.mkdirSync(path.dirname(envPath), { recursive: true });
+        fs.writeFileSync(envPath, provision.join('\n') + '\n', { encoding: 'utf8' });
+        log('Provisioned missing runtime env at the authoritative path: ' + envPath);
+        return;
+      }
+      const text = fs.readFileSync(envPath, 'utf8');
+      const result = syncSupabaseCredentialsIntoEnv(text, packagedSource);
+      if (result.changed) {
+        fs.writeFileSync(envPath, result.patched, { encoding: 'utf8' });
+        log('Synchronized Supabase credentials into runtime env: ' + envPath);
+      } else {
+        log('Supabase credentials already in sync with packaged env: ' + envPath);
       }
     } catch (e) {
       log('Supabase credential repair warning: ' + e.message);
@@ -883,9 +907,20 @@ function setupAutoUpdate() {
     log('App ready');
   }).catch((error) => {
     log('FATAL: CRM startup failed: ' + error.message);
-    const message = /readonly|read-only|permission denied|access is denied|unable to open database|writable/i.test(error.message)
+    let message = /readonly|read-only|permission denied|access is denied|unable to open database|writable/i.test(error.message)
       ? 'BlackStack could not open the shared SQLite database for writing. Check that the database file and its folder are writable and not blocked by another process. No separate fallback database was opened.'
       : 'BlackStack could not start. Your shared database has not been intentionally replaced. Check the application log for details.';
+    // Disk I/O failures (SQLITE_IOERR) are usually a FULL DISK, not a broken
+    // database. Give the operator the actual free space of the drive that
+    // holds %APPDATA% so they can act instead of reinstalling.
+    if (/disk I\/O|SQLITE_IOERR|IOERR/i.test(error.message)) {
+      try {
+        const stats = require('fs').statfsSync(app.getPath('userData').slice(0, 3));
+        const freeMb = Math.round(stats.bavail * stats.bsize / (1024 * 1024));
+        message += `\n\nThe drive holding the application data has ${freeMb} MB free.` +
+          (freeMb < 2048 ? ' This is critically low — free up disk space and restart the app.' : '');
+      } catch { /* keep the base message */ }
+    }
     dialog.showErrorBox('BlackStack CRM could not start', message + '\n\nDetails: ' + error.message);
     app.quit();
   });
