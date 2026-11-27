@@ -134,6 +134,92 @@
           Sign-in requires an internet connection — authentication is handled
           securely by Supabase.
         </p>
+
+        <!-- Version & Update Section ── -->
+        <section id="login-update-section" class="mt-stack-lg pt-stack-md border-t border-outline-variant/30">
+          <div class="flex items-center justify-between mb-2">
+            <span id="login-app-version" class="font-body-xs text-body-xs text-on-surface-variant/60">BlackStack CRM</span>
+            <button id="login-check-update" type="button" class="flex items-center gap-1 px-2 py-1 rounded bg-surface-container-low text-body-xs font-body-xs text-on-surface-variant hover:bg-surface-container transition-colors">
+              <span class="material-symbols-outlined text-[14px]">refresh</span>
+            </button>
+          </div>
+
+          <!-- Channel selector -->
+          <div class="flex items-center gap-3 mb-3">
+            <label class="font-body-xs text-body-xs text-on-surface-variant/70">Update channel:</label>
+            <div class="flex gap-1 bg-surface-container-low rounded p-0.5">
+              <label class="flex items-center gap-1 px-2 py-1 rounded text-body-xs cursor-pointer hover:bg-surface-container transition-colors">
+                <input type="radio" name="login-update-channel" value="stable" class="accent-secondary" checked/>
+                <span>Stable</span>
+              </label>
+              <label class="flex items-center gap-1 px-2 py-1 rounded text-body-xs cursor-pointer hover:bg-surface-container transition-colors">
+                <input type="radio" name="login-update-channel" value="beta" class="accent-secondary"/>
+                <span>Pre-release</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Update status -->
+          <div id="login-update-status" class="hidden space-y-2">
+            <div id="login-update-header" class="flex items-center justify-between mb-1">
+              <span class="font-body-xs text-body-xs text-on-surface">Update available</span>
+              <span id="login-update-channel-badge" class="px-1.5 py-0.5 rounded text-[10px] font-label-md bg-secondary-fixed text-on-secondary-fixed">Stable</span>
+            </div>
+            <div class="grid grid-cols-2 gap-1 mb-2">
+              <div>
+                <span class="font-body-xs text-body-xs text-on-surface-variant/70 block">Current</span>
+                <span id="login-update-current" class="font-body-sm text-body-sm text-on-surface mono">v—</span>
+              </div>
+              <div>
+                <span class="font-body-xs text-body-xs text-on-surface-variant/70 block">Available</span>
+                <span id="login-update-available" class="font-body-sm text-body-sm text-secondary mono">v—</span>
+              </div>
+            </div>
+            <p id="login-update-description" class="font-body-xs text-body-xs text-on-surface-variant/70 mb-3"></p>
+
+            <!-- Action buttons -->
+            <div class="flex gap-2">
+              <button id="login-update-now" type="button" class="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-primary text-on-primary font-label-md text-label-sm uppercase tracking-wider hover:bg-primary/90 transition-colors">
+                <span class="material-symbols-outlined text-[16px]">download</span>
+                Update Now
+              </button>
+              <button id="login-update-later" type="button" class="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-surface-container-low text-on-surface-variant font-label-md text-label-sm uppercase tracking-wider hover:bg-surface-container transition-colors">
+                <span class="material-symbols-outlined text-[16px]">schedule</span>
+                Later
+              </button>
+            </div>
+
+            <!-- Progress (hidden by default) -->
+            <div id="login-update-progress" class="hidden mt-3">
+              <div class="flex justify-between mb-1">
+                <span class="font-body-xs text-body-xs text-on-surface-variant">Downloading</span>
+                <span id="login-update-percent" class="font-body-xs text-body-xs text-on-surface">0%</span>
+              </div>
+              <div class="w-full bg-surface-container-low rounded-full h-1.5">
+                <div id="login-update-progress-bar" class="bg-secondary h-1.5 rounded-full" style="width: 0%"></div>
+              </div>
+              <span id="login-update-progress-text" class="font-body-xs text-body-xs text-on-surface-variant/70 block mt-1">Preparing download…</span>
+            </div>
+
+            <!-- Error -->
+            <div id="login-update-error" class="hidden flex items-center gap-2 p-2 rounded bg-error-container/50 border border-error-container/30">
+              <span class="material-symbols-outlined text-[16px] text-error">error</span>
+              <span id="login-update-error-message" class="font-body-xs text-body-xs text-error"></span>
+            </div>
+          </div>
+
+          <!-- No update available -->
+          <div id="login-update-none" class="hidden flex items-center justify-between py-2">
+            <span class="font-body-xs text-body-xs text-on-surface-variant">You're up to date</span>
+            <span id="login-update-none-version" class="font-body-xs text-body-xs text-on-surface-variant/60 mono">v—</span>
+          </div>
+
+          <!-- Checking -->
+          <div id="login-update-checking" class="hidden flex items-center gap-2 py-2">
+            <span class="material-symbols-outlined text-[14px] text-on-surface-variant animate-pulse">refresh</span>
+            <span class="font-body-xs text-body-xs text-on-surface-variant">Checking for updates…</span>
+          </div>
+        </section>
       </div>
       <p class="text-center font-body-sm text-body-sm text-on-surface-variant/60 mt-4">BlackStack CRM V2</p>
     </div>

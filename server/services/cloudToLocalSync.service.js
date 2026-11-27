@@ -184,6 +184,17 @@ async function syncUserCompanyFromCloud(db, identity, log = console) {
     // display name from the agency (never invents data; purely cosmetic).
     company = { id: companyId || agency.company_id, name: agency.name, status: 'ACTIVE' };
   }
+  if (company === null && companyId) {
+    // Mother Company / platform operator case: the local user row carries a
+    // company_id (e.g. 'default') but the cloud has no matching `companies`
+    // row and no agency row. Previously this fell through to `company.id` and
+    // threw "Cannot read properties of null" — logged as a login-time warning
+    // on every Mother Company login (verified live 2026-11-27). Synthesise the
+    // display-only mirror exactly like the agency branch above so the local
+    // INSERT OR IGNORE below can create the company row. No cloud write, no
+    // invented tenant data beyond the already-established local company_id.
+    company = { id: companyId, name: 'BlackStack', status: 'ACTIVE' };
+  }
   if (!company && companyId === null) {
     return { synced: false, reason: 'NO_COMPANY', companyId: null, agencyId: agencyId, profile: null };
   }

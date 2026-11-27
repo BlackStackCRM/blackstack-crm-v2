@@ -26,6 +26,29 @@
 const { createClient: supabaseCreateClient, SupabaseClient } = require('@supabase/supabase-js');
 
 /**
+ * Creates a fetch wrapper that aborts the underlying request after `timeoutMs`
+ * milliseconds. Node's default `fetch` has no built-in timeout, so without
+ * this a hung Supabase request (e.g. network blackhole, DNS stall) blocks the
+ * event loop indefinitely.
+ *
+ * @param {number} timeoutMs - abort after this many milliseconds
+ * @returns {(input, init?) => Promise<Response>}
+ */
+function createTimeoutFetch(timeoutMs = 30000) {
+  return async (input, init = {}) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const signal = init.signal ? new AbortSignal.any([init.signal, controller.signal]) : controller.signal;
+    try {
+      const response = await fetch(input, { ...init, signal });
+      return response;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}
+
+/**
  * P2 (fail-closed, audit §26.7 R3): a DESKTOP build must NEVER fall back to
  * the service-role key. Historically this fallback made a desktop install
  * that carried SUPABASE_SERVICE_ROLE_KEY in its env silently operate with
@@ -74,7 +97,7 @@ function getProjectRef() {
   return process.env.SUPABASE_PROJECT_REF || null;
 }
 
-function getSupabaseClient() {
+function getSupabaseClient(timeoutMs = 30000) {
   if (!isConfigured()) {
     throw new Error('Supabase not configured (SUPABASE_URL / SUPABASE_ANON_KEY missing or empty).');
   }
@@ -83,6 +106,8 @@ function getSupabaseClient() {
       persistSession: false,
       autoRefreshToken: false,
     },
+    // 30s default timeout so a hung Supabase request cannot block indefinitely.
+    fetch: createTimeoutFetch(timeoutMs),
   });
 }
 
@@ -94,4 +119,5 @@ module.exports = {
   getProjectRef,
   getSupabaseClient,
   supabaseCreateClient,
+  createTimeoutFetch,
 };

@@ -58,6 +58,16 @@ async function recoverSubscriptionAccess() {
   }
 }
 
+function fetchWithTimeout(input, init, timeoutMs = 30000) {
+  if (typeof AbortController === 'undefined') {
+    return fetch(input, init);
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const signal = init.signal ? new AbortSignal.any([init.signal, controller.signal]) : controller.signal;
+  return fetch(input, { ...init, signal }).finally(() => clearTimeout(timer));
+}
+
 async function request(method, endpoint, data = null, options = {}) {
   const url = `${API_BASE}${endpoint}`;
   const headers = {
@@ -87,7 +97,7 @@ async function request(method, endpoint, data = null, options = {}) {
   }
 
   try {
-    const response = await fetch(url, config);
+    const response = await fetchWithTimeout(url, config, 30000);
     const result = await response.json();
 
     // Support two response shapes:
@@ -107,6 +117,14 @@ async function request(method, endpoint, data = null, options = {}) {
     // Return data from wrapper, or the result itself for unwrapped responses
     return result.data !== undefined ? result.data : result;
   } catch (error) {
+    // TIMEOUT: an aborted fetch means the server did not respond within
+    // 30 seconds — treat it as unavailable, not as an auth failure.
+    if (error.name === 'AbortError') {
+      if (!options.silent && typeof Toast !== 'undefined') {
+        Toast.error('The server is taking too long to respond. Please try again.');
+      }
+      throw error;
+    }
     // DECORATIVE CALLS: options.silent marks background/best-effort requests
     // (Topbar notifications, decoration counters). Their failure must never
     // drive global navigation — the caller handles (or swallows) the error.
