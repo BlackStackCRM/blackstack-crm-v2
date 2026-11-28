@@ -23,6 +23,7 @@ const { successResponse } = require('../utils/response');
 const { generateId } = require('../utils/generateId');
 const { ValidationError, AuthorizationError, NotFoundError } = require('../utils/errors');
 const rbac = require('../services/rbac.service');
+const { PasswordService } = require('../auth/password');
 
 const router = express.Router();
 

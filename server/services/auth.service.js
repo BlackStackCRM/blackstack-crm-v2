@@ -243,11 +243,21 @@ class AuthService {
         return definitive ? 'invalid' : 'unavailable';
       }
       console.log('[auth] supabase credential check OK for', email);
+      const accessToken = data.session ? data.session.access_token : null;
+      const refreshToken = data.session ? data.session.refresh_token : null;
+      // Persist the refresh token through the main-process encrypted sink so a
+      // request-scoped access token can be minted later (RLS-safe reads). The
+      // credential check itself is unchanged; no token value is logged.
+      if (refreshToken) {
+        try {
+          require('../auth/refreshTokenSink').persistRefreshToken(refreshToken);
+        } catch { /* sink not configured (e.g. tests) — non-fatal */ }
+      }
       // Return the session access token too: with the ANON key the only way a
       // desktop client may read RLS-protected rows is by authenticating AS the
       // user (Authorization: Bearer <token>). RLS then resolves auth.uid() to
       // this user and exposes exactly their own tenant rows.
-      return { userId: data.user.id, accessToken: data.session ? data.session.access_token : null };
+      return { userId: data.user.id, accessToken, refreshToken };
     } catch (e) {
       console.warn('[auth] supabase check threw:', e.message);
       return 'unavailable';

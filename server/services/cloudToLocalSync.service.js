@@ -96,6 +96,12 @@ async function syncUserCompanyFromCloud(db, identity, log = console) {
         id: self.user_id,
         user_metadata: { full_name: self.full_name || null, name: self.full_name || null },
       };
+      // Populate the metadata fallback from the RLS-protected self row. The anon
+      // key cannot read auth.app_metadata, so the profiles row is the only
+      // server-readable source for the caller's own agency/company/role.
+      meta.agency_id = self.agency_id || null;
+      meta.company_id = self.company_id || null;
+      if (!role && self.role) role = String(self.role).toLowerCase();
     }
   }
 

@@ -207,17 +207,10 @@ function resolveCaller(db, session) {
       );
       if (byOwnCompany) localAgencyId = byOwnCompany.id;
     }
-    if (!localAgencyId && user.supabase_user_id) {
-      try {
-        const cloudId = require('./supabase.service').supabaseAgencyIdForUser(user.supabase_user_id);
-        if (cloudId) {
-          const all = typeof db.all === 'function' ? db.all('SELECT id FROM agencies') : db.prepare('SELECT id FROM agencies').all();
-          const { localIdToCloudUuid } = require('./supabase.service');
-          const match = all.find((r) => localIdToCloudUuid(r.id) === cloudId);
-          if (match) localAgencyId = match.id;
-        }
-      } catch { /* cloud unavailable — leave null */ }
-    }
+    // NOTE: supabaseAgencyIdForUser() is async (RLS-safe profiles lookup) and
+    // cannot be awaited from this synchronous resolver. The previous synchronous
+    // call always threw and was swallowed, so it never resolved a cloud id. Use
+    // the exported async helper from async callers; sync resolution stays local.
   }
   return {
     localUserId: user.id,

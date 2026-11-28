@@ -271,27 +271,57 @@ class AgencyService {
    * snakeToCamel response middleware converts them to camelCase for the
    * frontend.
    */
+  /**
+   * Supabase client scoped to the CALLER's user JWT when a request-scoped
+   * access token is available, so RLS resolves auth.uid() to the real user.
+   * Falls back to the default client (RLS-restricted) when no token exists.
+   */
+  async _userScopedClient() {
+    const { getSupabaseClient, getSupabaseUrl, getAnonKey } = require('../config/supabase');
+    try {
+      const { getUserAccessToken } = require('../auth/userTokenProvider');
+      const token = await getUserAccessToken();
+      if (token) {
+        const { createClient } = require('@supabase/supabase-js');
+        return createClient(getSupabaseUrl(), getAnonKey(), {
+          auth: { persistSession: false, autoRefreshToken: false },
+          global: { headers: { Authorization: `Bearer ${token}` } },
+        });
+      }
+    } catch { /* fall back to the default client */ }
+    return getSupabaseClient();
+  }
+
   async listFromSupabase({ providerCompanyId, search, status, isActive, limit = 50, offset = 0 } = {}) {
     const { isConfigured, getSupabaseClient } = require('../config/supabase');
     if (!isConfigured()) {
       throw new Error('Supabase not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing).');
     }
-    const client = getSupabaseClient();
+    const client = await this._userScopedClient();
 
     const lim = Math.min(Number(limit) || 50, 200);
     const off = Math.max(Number(offset) || 0, 0);
+
+    // FIX (UUID namespace): the local company id is a slug (e.g. 'default'), but
+    // the cloud column is a UUID. Map the local id to its deterministic cloud
+    // UUID (same value on every device) instead of querying with 'default',
+    // which can never match a UUID column.
+    const { localIdToCloudUuid } = require('./supabase.service');
+    const cloudProviderCompanyId = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(providerCompanyId || ''))
+      ? providerCompanyId
+      : localIdToCloudUuid(providerCompanyId);
 
     // Build the count query — must apply the same base filter as the data query.
     let countQ = client
       .from('agencies')
       .select('id', { count: 'exact', head: true })
-      .eq('provider_company_id', providerCompanyId);
+      .eq('provider_company_id', cloudProviderCompanyId);
 
     // Build the data query.
     let q = client
       .from('agencies')
       .select('id, agency_code, name, legal_name, contact_name, contact_email, contact_phone, city, state, country, status, is_active, activated_at, suspended_at, created_at, updated_at')
-      .eq('provider_company_id', providerCompanyId)
+      .eq('provider_company_id', cloudProviderCompanyId)
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .range(off, off + lim - 1);
@@ -408,6 +438,54 @@ class AgencyService {
       suspendedAgencies: counts.SUSPENDED,
       terminatedAgencies: counts.TERMINATED,
       activeAdministrators: adminCount,
+    };
+  }
+
+  /**
+   * Overview counts read DIRECTLY from Supabase Cloud (read-through).
+   *
+   * Uses the same provider-company scoping and deterministic local-id -> cloud
+   * UUID mapping as listFromSupabase(). Throws when Supabase is not configured
+   * or a query fails, so the caller can fall back to local stats instead of
+   * reporting fabricated zeros.
+   */
+  async statsFromSupabase(providerCompanyId) {
+    const { isConfigured, getSupabaseClient } = require('../config/supabase');
+    if (!isConfigured()) {
+      throw new Error('Supabase not configured (SUPABASE_URL / SUPABASE_ANON_KEY missing).');
+    }
+    const { localIdToCloudUuid } = require('./supabase.service');
+    const cloudProviderCompanyId = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(providerCompanyId || ''))
+      ? providerCompanyId
+      : localIdToCloudUuid(providerCompanyId);
+    const client = await this._userScopedClient();
+
+    const { data, error } = await client
+      .from('agencies')
+      .select('status')
+      .eq('provider_company_id', cloudProviderCompanyId);
+    if (error) throw new Error(error.message || 'Supabase stats query failed');
+
+    const counts = { PENDING: 0, ACTIVE: 0, SUSPENDED: 0, TERMINATED: 0 };
+    for (const r of (data || [])) {
+      if (counts[r.status] !== undefined) counts[r.status] += 1;
+    }
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+
+    const { count, error: adminErr } = await client
+      .from('agency_administrators')
+      .select('id, agencies!inner(provider_company_id)', { count: 'exact', head: true })
+      .eq('status', 'ACTIVE')
+      .eq('agencies.provider_company_id', cloudProviderCompanyId);
+    if (adminErr) throw new Error(adminErr.message || 'Supabase admin stats query failed');
+
+    return {
+      totalAgencies: total,
+      activeAgencies: counts.ACTIVE,
+      pendingAgencies: counts.PENDING,
+      suspendedAgencies: counts.SUSPENDED,
+      terminatedAgencies: counts.TERMINATED,
+      activeAdministrators: count || 0,
     };
   }
 

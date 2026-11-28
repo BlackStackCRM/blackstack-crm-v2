@@ -70,11 +70,16 @@ router.get('/dashboard',
     const service = svc();
     let stats;
       try {
-      stats = await service.statsFromSupabase(req.user.companyId);
-    } catch (supabaseErr) {
-      console.warn('[mother-company] Supabase stats unavailable, falling back to local SQLite:', supabaseErr.message);
-      stats = service.stats(req.user.companyId);
-    }
+        const cloudStats = await service.statsFromSupabase(req.user.companyId);
+        // An empty cloud result (e.g. RLS-scoped anon read) must not replace
+        // real local counts with zeros — fall back to the local read model.
+        stats = (cloudStats && cloudStats.totalAgencies > 0)
+          ? cloudStats
+          : service.stats(req.user.companyId);
+      } catch (supabaseErr) {
+        console.warn('[mother-company] Supabase stats unavailable, falling back to local SQLite:', supabaseErr.message);
+        stats = service.stats(req.user.companyId);
+      }
     const licenses = await new AgencyService(getConn()).getLicenseOverview(req.user.companyId);
     res.json(successResponse({
       stats,

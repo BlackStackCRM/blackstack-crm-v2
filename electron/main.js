@@ -885,6 +885,16 @@ function setupAutoUpdate() {
   // boolean "has session". session:get returns the token to the MAIN-process
   // auth helper only (same-process consumption), never across IPC.
   const secureSession = require(path.join(__dirname, 'secure-session-store'));
+  // Request-scoped token bridge: register the encrypted store as the sink so
+  // the server login path can persist the Supabase refresh token without the
+  // server importing Electron. No token value is logged.
+  try {
+    require(path.join(__dirname, '../server/auth/refreshTokenSink')).setRefreshTokenSink({
+      save: (t) => { secureSession.saveRefreshToken({ app, safeStorage }, t); },
+      load: () => secureSession.loadRefreshToken({ app, safeStorage }),
+      clear: () => { secureSession.clearRefreshToken({ app, safeStorage }); },
+    });
+  } catch { /* sink optional (non-Electron/test runs) */ }
   ipcMain.handle('session:save', (_e, refreshToken) => {
     if (typeof refreshToken !== 'string' || refreshToken.length < 10) return { ok: false, reason: 'INVALID' };
     return { ok: secureSession.saveRefreshToken({ app, safeStorage }, refreshToken).stored };

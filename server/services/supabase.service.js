@@ -398,6 +398,30 @@ function forwardAgencyToCloud(db, agency, actor) {
   }
 }
 
+/**
+ * Resolve the cloud agency UUID administered by a Supabase Auth user.
+ *
+ * RLS-safe: reads the caller's own profiles row (user_id = auth.uid()) through
+ * the authenticated client. Returns null when there is no mapping or the caller
+ * is not authorized; throws only on a real query error so callers can fail
+ * closed instead of silently treating an error as "no agency".
+ *
+ * @param {string} supabaseUserId  Supabase Auth UUID (users.supabase_user_id)
+ * @returns {Promise<string|null>}
+ */
+async function supabaseAgencyIdForUser(supabaseUserId) {
+  if (!supabaseUserId) return null;
+  const client = getClient();
+  if (!client) return null;
+  const { data, error } = await client
+    .from('profiles')
+    .select('agency_id')
+    .eq('user_id', supabaseUserId)
+    .maybeSingle();
+  if (error) throw new Error(error.message || 'profiles lookup failed');
+  return (data && data.agency_id) || null;
+}
+
 module.exports = {
   forwardAgencyToCloud,
   retryPending,
@@ -409,6 +433,7 @@ module.exports = {
   auditToCloud,
   localIdToCloudUuid,
   agencyUuidForCompany,
+  supabaseAgencyIdForUser,
   // FIX 2 companion (audit 2026-11-02): expose getClient on the module surface so
   // tests can monkeypatch it (cloud-failure-retry.test.js re-assigns this to a
   // factory that returns a controlled stub client). Previously it was private,
