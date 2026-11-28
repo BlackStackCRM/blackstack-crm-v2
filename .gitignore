@@ -10,6 +10,8 @@ build/
 .env.local
 .env.*.local
 .env.release
+.env*.bak
+.env.bom-bak
 *.log
 npm-debug.log*
 yarn-debug.log*

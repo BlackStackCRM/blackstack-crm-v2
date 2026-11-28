@@ -25,7 +25,8 @@ const { AgencyService } = require('../services/agency.service');
 // router the only endpoint shape in the API, so it uses the shared helpers.
 const { successResponse } = require('../utils/response');
 const { getConn } = require('../utils/db');
-const { ValidationError, AppError, NotFoundError } = require('../utils/errors');
+const { ValidationError, AppError, NotFoundError, AuthorizationError } = require('../utils/errors');
+const { resolveCaller } = require('../services/rbac.service');
 const { PasswordService } = require('../auth/password');
 
 const router = express.Router();
@@ -34,6 +35,31 @@ const router = express.Router();
 router.use(authMiddleware);
 
 const svc = () => new AgencyService(getConn());
+
+// Live authorization revalidation against the LOCAL SQLite DB (the authority for
+// mother-company role/permissions/status). Session claims are never trusted on
+// their own: a demoted, suspended or deactivated operator is rejected here even
+// if their 7-day token still carries the old role/permission.
+function liveHasPermission(db, userId, code) {
+  const get = (sql, params) => (typeof db.get === 'function'
+    ? db.get(sql, params)
+    : db.prepare(sql).get(...(Array.isArray(params) ? params : [params])));
+  return !!get(
+    `SELECT 1 FROM user_roles ur
+     JOIN role_permissions rp ON rp.role_id = ur.role_id
+     JOIN permissions p ON p.id = rp.permission_id
+     WHERE ur.user_id = ? AND p.code = ? LIMIT 1`,
+    [userId, code],
+  );
+}
+
+function requireLiveMotherCompanyAdmin(req) {
+  const caller = resolveCaller(getConn(), { userId: req.user.userId });
+  if (!caller) throw new AuthorizationError('Mother Company access required');
+  if (caller.role === 'platform') return;
+  if (liveHasPermission(getConn(), req.user.userId, P.AGENCIES_ADMINS)) return;
+  throw new AuthorizationError('Mother Company access required');
+}
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
 
@@ -283,6 +309,9 @@ router.post('/agencies/:id/administrators',
   requireMotherCompany(P.AGENCIES_ADMINS),
   async (req, res, next) => {
     try {
+      // Revalidate the caller against the authoritative DB on every request;
+      // never authorize on the (up to 7-day) session claims alone.
+      requireLiveMotherCompanyAdmin(req);
       // NOTE: app.js rewrites req.body to snake_case before any route runs
       // (see the camelToSnake middleware), so routes destructure snake_case keys.
       // Destructuring `fullName` here silently received undefined.

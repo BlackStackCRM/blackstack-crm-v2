@@ -8,19 +8,26 @@
 //   Desktop (anon key + caller JWT) -> this function -> Supabase Auth Admin
 //   -> returns the real Auth user id -> desktop writes the local mirror.
 //
-// Auth: the caller's JWT is verified with the service client; the caller must be
-// a Mother Company / platform administrator. Agency existence is re-checked
-// server-side. No privileged credential is ever returned to the client.
+// Auth: the caller's desktop app JWT (HS256, issuer blackstack-crm, audience
+// blackstack-crm-desktop) is verified against APP_JWT_SECRET. The caller is then
+// revalidated LIVE with the service role: the Auth identity must exist, not be
+// disabled or banned, profiles.is_active must not be false, and a live admin role
+// must be confirmed (app_metadata.role or profiles.role). A missing live role, a
+// revoked/demoted role, or an unavailable lookup is DENIED. JWT claims alone
+// never authorize. Agency existence is re-checked server-side. No privileged
+// credential is ever returned to the client.
 //
 // Deploy (operator, requires the service-role secret):
 //   supabase link --project-ref <ref>
 //   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+//   supabase secrets set APP_JWT_SECRET=<value of JWT_SECRET from runtime .env>
 //   supabase functions deploy provision-agency-admin
 //   supabase secrets set SUPABASE_ANON_KEY=<anon-key>   # optional, for CORS apikey
 // Config the desktop with: SUPABASE_PROVISION_URL (this function's URL).
 // ----------------------------------------------------------------------------
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verifyAppJwt, authorizeCallerLive } from './jwt.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -35,15 +42,14 @@ function json(body, status = 200) {
   });
 }
 
-const ADMIN_ROLES = new Set(['platform', 'admin', 'mother_company', 'super_admin']);
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: { code: 'METHOD_NOT_ALLOWED', message: 'Use POST.' } }, 405);
 
   const url = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!url || !serviceKey) {
+  const appSecret = Deno.env.get('APP_JWT_SECRET');
+  if (!url || !serviceKey || !appSecret) {
     return json({ error: { code: 'PROVISION_NOT_CONFIGURED', message: 'Provisioning is not configured on the server.' } }, 503);
   }
 
@@ -53,13 +59,31 @@ Deno.serve(async (req) => {
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
-  // 1. Verify the caller and enforce Mother Company authorization.
-  const { data: userData, error: userErr } = await admin.auth.getUser(jwt);
-  if (userErr || !userData?.user) {
+  // 1. Verify the caller's app session token, then revalidate the caller LIVE
+  // against the authoritative server-side data (service role). Stale JWT
+  // role/permission claims are never trusted on their own.
+  let payload;
+  try {
+    payload = await verifyAppJwt(jwt, appSecret);
+  } catch {
+    payload = null;
+  }
+  if (!payload) {
     return json({ error: { code: 'UNAUTHORIZED', message: 'Invalid caller token.' } }, 401);
   }
-  const callerRole = String(userData.user.app_metadata?.role || '').toLowerCase();
-  if (!ADMIN_ROLES.has(callerRole)) {
+  let authz;
+  try {
+    authz = await authorizeCallerLive(admin, payload);
+  } catch {
+    return json({ error: { code: 'SUPABASE_AUTH_LOOKUP_FAILED', message: 'Could not verify the caller.' } }, 502);
+  }
+  if (!authz.ok) {
+    if (authz.code === 'SUPABASE_AUTH_LOOKUP_FAILED') {
+      return json({ error: { code: 'SUPABASE_AUTH_LOOKUP_FAILED', message: 'Could not verify the caller.' } }, 502);
+    }
+    if (authz.code === 'UNAUTHORIZED') {
+      return json({ error: { code: 'UNAUTHORIZED', message: 'Invalid caller token.' } }, 401);
+    }
     return json({ error: { code: 'FORBIDDEN', message: 'Only a Mother Company administrator may assign administrators.' } }, 403);
   }
 
