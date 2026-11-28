@@ -322,7 +322,13 @@ router.post('/agencies/:id/administrators',
       );
       const { isConfigured, getSupabaseClient } = require('../config/supabase');
       const { ensureAgencyAuthUser, findAuthUserByEmail } = require('../services/agency-admin-auth');
-      const sb = isConfigured() ? getSupabaseClient() : null;
+      // Phase 73: when a trusted provisioning endpoint is configured, delegate the
+      // privileged Auth admin call to it (service role stays server-side). When it
+      // is NOT configured, keep the existing anon-only behaviour (which surfaces a
+      // clear error) — never a local-only administrator substitute.
+      const provision = require('../services/agency-admin-provision');
+      const useProvisioning = provision.isProvisioningConfigured();
+      const sb = (!useProvisioning && isConfigured()) ? getSupabaseClient() : null;
       const authMatch = sb ? await findAuthUserByEmail(sb, normalizedEmail) : null;
       if (existingLink && existingLink.agency_id !== localAgencyId) {
         throw new AppError('This account is already linked to another agency.', 'CONFLICT', 409);
@@ -333,7 +339,14 @@ router.post('/agencies/:id/administrators',
       }
 
       let identity = null;
-      if (sb) {
+      if (useProvisioning) {
+        identity = await provision.provisionAgencyAuthUser({
+          email: normalizedEmail,
+          password,
+          agencyId: (agency && agency.id) || localAgencyId,
+          callerJwt: req.headers.authorization,
+        });
+      } else if (sb) {
         identity = await ensureAgencyAuthUser(sb, {
           email: normalizedEmail,
           username,
@@ -357,13 +370,19 @@ router.post('/agencies/:id/administrators',
           supabaseUserId: identity && identity.user.id,
         });
       } catch (assignError) {
-        if (identity && identity.created && sb) {
-          const { error: cleanupError } = await sb.auth.admin.deleteUser(identity.user.id);
-          if (cleanupError && cleanupError.code !== 'user_not_found') {
-            console.error('[mother-company] failed to roll back new Auth identity after local assign failure', {
-              authUserId: identity.user.id,
-              code: cleanupError.code || 'unknown',
-            });
+        if (identity && identity.created) {
+          if (useProvisioning) {
+            // Trusted rollback: remove the freshly created Auth identity so a
+            // failed local write never leaves an orphaned Supabase user.
+            await provision.rollbackProvisionedUser({ userId: identity.user.id, callerJwt: req.headers.authorization });
+          } else if (sb) {
+            const { error: cleanupError } = await sb.auth.admin.deleteUser(identity.user.id);
+            if (cleanupError && cleanupError.code !== 'user_not_found') {
+              console.error('[mother-company] failed to roll back new Auth identity after local assign failure', {
+                authUserId: identity.user.id,
+                code: cleanupError.code || 'unknown',
+              });
+            }
           }
         }
         throw assignError;
