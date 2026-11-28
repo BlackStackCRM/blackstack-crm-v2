@@ -26,6 +26,7 @@
 
 const { isConfigured, getSupabaseClient } = require('../config/supabase');
 const { generateId } = require('../utils/generateId');
+const { ensureMotherCompanyAdmin, MOTHER_COMPANY } = require('../database/motherCompanyBootstrap');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -152,8 +153,25 @@ async function syncUserCompanyFromCloud(db, identity, log = console) {
   }
 
   if (!companyId && !agencyId) {
-    log.info && log.info(`[cloud-sync] No cloud tenant mapped for ${email} — nothing to sync`);
-    return { synced: false, reason: 'NO_TENANT', companyId: null, agencyId: null, profile: null };
+    // SECOND-PC LOGIN FIX: the Mother Company identity has no Supabase
+    // profiles / agency_administrators tenant mapping to pull down, so a fresh
+    // install would return NO_TENANT and the (already cloud-verified) login
+    // would 401 with the generic "Invalid credentials." message. Self-heal by
+    // creating the canonical local mirror row — idempotently, with NO local
+    // password — keyed on the VERIFIED cloud UUID, then continue the normal
+    // mirror flow below. Non-Mother-Company users still get NO_TENANT.
+    if (email === MOTHER_COMPANY.email) {
+      const res = ensureMotherCompanyAdmin(db, { supabaseUserId: cloudUid, log });
+      companyId = MOTHER_COMPANY.companyId;
+      localUser = db.get(
+        'SELECT id, company_id, supabase_user_id, role, hierarchy_role FROM users WHERE id = ? LIMIT 1',
+        [MOTHER_COMPANY.id],
+      );
+      log.info && log.info(`[cloud-sync] Mother Company mirror ${res.created ? 'created' : 'already present'} for ${email} (supabase_user_id=${res.supabaseUserId || 'unbound'})`);
+    } else {
+      log.info && log.info(`[cloud-sync] No cloud tenant mapped for ${email} — nothing to sync`);
+      return { synced: false, reason: 'NO_TENANT', companyId: null, agencyId: null, profile: null };
+    }
   }
 
   // ── 3. Pull the agency + its own tenant company ──────────────────────────

@@ -4,7 +4,9 @@
 // is gated behind explicit modes. Passwords are never logged.
 //
 //   Development bootstrap (explicit): DEMO_MODE=true npm run seed
-//   Production bootstrap (explicit):  BOOTSTRAP_ADMIN_EMAIL=... BOOTSTRAP_ADMIN_PASSWORD=... npm run seed
+//   Production bootstrap (explicit):  BOOTSTRAP_ADMIN_EMAIL=admin@blackstack.local npm run seed
+//     (credential-free Mother Company mirror; optional BOOTSTRAP_ADMIN_SUPABASE_ID
+//      overrides the verified cloud UUID. No local password is ever used.)
 
 const { DatabaseConnection } = require('./connection');
 const bcrypt = require('bcryptjs');
@@ -17,11 +19,13 @@ async function seed() {
   const bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL;
   const bootstrapPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD;
 
-  if (!demoMode && !(bootstrapEmail && bootstrapPassword)) {
+  if (!demoMode && !bootstrapEmail) {
+    // Production bootstrap is the Mother Company mirror (NO local password): it
+    // is triggered by BOOTSTRAP_ADMIN_EMAIL alone. The legacy bcrypt admin path
+    // below is DEMO_MODE-only. With neither set there is nothing to do.
     console.warn(
-      '[seed] Refusing to seed: no bootstrap credentials provided.\n' +
-      '  Development: DEMO_MODE=true npm run seed\n' +
-      '  Production:  BOOTSTRAP_ADMIN_EMAIL=... BOOTSTRAP_ADMIN_PASSWORD=... npm run seed'
+      '[seed] Nothing to seed: set DEMO_MODE=true (development) or ' +
+      'BOOTSTRAP_ADMIN_EMAIL=admin@blackstack.local (production Mother Company mirror).'
     );
     conn.close();
     return;
@@ -61,23 +65,47 @@ async function seed() {
   const ADMIN_ID = 'admin';
   const ADMIN_USERNAME = 'admin';
 
-  const adminExists = conn.prepare(
-    'SELECT id FROM users WHERE email = ? OR username = ? COLLATE NOCASE OR id = ? LIMIT 1'
-  ).get(adminEmail, ADMIN_USERNAME, ADMIN_ID);
+  if (demoMode) {
+    // ── DEMO admin (development only) ────────────────────────────────────────
+    // The bcrypt hash written here is NEVER used to authenticate (authentication
+    // is Supabase-only); it exists solely so a development database has a
+    // non-empty password_hash column. Production uses the credential-free mirror.
+    const adminExists = conn.prepare(
+      'SELECT id FROM users WHERE email = ? OR username = ? COLLATE NOCASE OR id = ? LIMIT 1'
+    ).get(adminEmail, ADMIN_USERNAME, ADMIN_ID);
 
-  if (adminExists) {
-    console.log('[seed] Admin user already exists. Skipping admin creation (demo/master data seeding continues).');
+    if (adminExists) {
+      console.log('[seed] Admin user already exists. Skipping admin creation (demo/master data seeding continues).');
+    } else {
+      const passwordHash = await bcrypt.hash(adminPassword, 10);
+      conn.transaction(() => {
+        conn.prepare(`
+          INSERT INTO users (id, company_id, username, email, password_hash, full_name, role, status)
+          VALUES (?, ?, ?, ?, ?, ?, 'ADMIN', 'ACTIVE')
+        `).run(ADMIN_ID, companyId, ADMIN_USERNAME, adminEmail, passwordHash, 'System Administrator');
+        conn.prepare('INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)')
+          .run(ADMIN_ID, 'role_admin');
+      })();
+      console.log('[seed] DEMO admin created (development credentials, NOT for production).');
+    }
   } else {
-    const passwordHash = await bcrypt.hash(adminPassword, 10);
-    conn.transaction(() => {
-      conn.prepare(`
-        INSERT INTO users (id, company_id, username, email, password_hash, full_name, role, status)
-        VALUES (?, ?, ?, ?, ?, ?, 'ADMIN', 'ACTIVE')
-      `).run(ADMIN_ID, companyId, ADMIN_USERNAME, adminEmail, passwordHash, 'System Administrator');
-      conn.prepare('INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)')
-        .run(ADMIN_ID, 'role_admin');
-    })();
-    console.log('[seed]' + (demoMode ? ' DEMO admin created (development credentials, NOT for production).' : ' Bootstrap administrator created.'));
+    // ── PRODUCTION Mother Company mirror (Second-PC login fix) ───────────────
+    // No local password: Supabase Auth is the sole credential authority. The
+    // canonical mirror row (id='admin', company_id='default', role='ADMIN',
+    // status='ACTIVE', verified supabase_user_id) is created idempotently so a
+    // cloud-verified Mother Company login resolves locally on a fresh/empty DB.
+    try {
+      const { ensureMotherCompanyAdmin } = require('./motherCompanyBootstrap');
+      const res = ensureMotherCompanyAdmin(conn, {
+        supabaseUserId: process.env.BOOTSTRAP_ADMIN_SUPABASE_ID,
+        log: console,
+      });
+      console.log('[seed] Mother Company admin mirror ' + (res.created ? 'created' : 'already present') + '.');
+    } catch (e) {
+      // Recoverable: never abort startup. The login path (cloudToLocalSync)
+      // also self-heals this row, so the app remains fully usable.
+      console.warn('[seed] Mother Company bootstrap skipped (non-fatal):', e.message);
+    }
   }
 
   // PHASE-QA FIX: master/demo data seeding used to live INSIDE the `else` of

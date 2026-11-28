@@ -67,6 +67,11 @@ function ensureLocalRuntimeConfig(userDataDir, log) {
         const anon = (packagedText.match(/^SUPABASE_ANON_KEY=(.*)$/m) || [, ''])[1].trim();
         if (url) provision.push('SUPABASE_URL=' + url);
         if (anon) provision.push('SUPABASE_ANON_KEY=' + anon);
+        // Mother Company local-mirror bootstrap (idempotent, credential-free).
+        const bootEmail = (packagedText.match(/^BOOTSTRAP_ADMIN_EMAIL=(.*)$/m) || [, 'admin@blackstack.local'])[1].trim() || 'admin@blackstack.local';
+        const bootUid = (packagedText.match(/^BOOTSTRAP_ADMIN_SUPABASE_ID=(.*)$/m) || [, '21e8db5d-ba09-4a63-a108-56199a51ba69'])[1].trim() || '21e8db5d-ba09-4a63-a108-56199a51ba69';
+        provision.push('BOOTSTRAP_ADMIN_EMAIL=' + bootEmail);
+        provision.push('BOOTSTRAP_ADMIN_SUPABASE_ID=' + bootUid);
         fs.mkdirSync(path.dirname(envPath), { recursive: true });
         fs.writeFileSync(envPath, provision.join('\n') + '\n', { encoding: 'utf8' });
         log('Provisioned missing runtime env at the authoritative path: ' + envPath);
@@ -101,6 +106,11 @@ function ensureLocalRuntimeConfig(userDataDir, log) {
     // generated runtime .env can actually reach Supabase on machine #2.
     let supabaseUrl = process.env.SUPABASE_URL || '';
     let supabaseKey = process.env.SUPABASE_ANON_KEY || '';
+    // Mother Company local-mirror bootstrap (Second-PC login fix). Defaults match
+    // the verified Laptop identity so even an older packaged env still provisions
+    // a working mirror; the packaged blackstack.env can override them.
+    let bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL || 'admin@blackstack.local';
+    let bootstrapUid = process.env.BOOTSTRAP_ADMIN_SUPABASE_ID || '21e8db5d-ba09-4a63-a108-56199a51ba69';
     if (!supabaseUrl || !supabaseKey) {
       try {
         const packagedEnv = path.join(path.dirname(process.execPath), '..', 'resources', 'blackstack.env');
@@ -112,6 +122,8 @@ function ensureLocalRuntimeConfig(userDataDir, log) {
             if (!m) continue;
             if (m[1] === 'SUPABASE_URL' && !supabaseUrl) supabaseUrl = m[2].trim();
             if (m[1] === 'SUPABASE_ANON_KEY' && !supabaseKey) supabaseKey = m[2].trim();
+            if (m[1] === 'BOOTSTRAP_ADMIN_EMAIL' && m[2].trim()) bootstrapEmail = m[2].trim();
+            if (m[1] === 'BOOTSTRAP_ADMIN_SUPABASE_ID' && m[2].trim()) bootstrapUid = m[2].trim();
           }
           log('Read Supabase credentials from packaged env: ' + source);
         }
@@ -139,6 +151,10 @@ function ensureLocalRuntimeConfig(userDataDir, log) {
       '# Supabase Cloud Sync (injected at build time; empty values are harmless)',
       `SUPABASE_URL=${supabaseUrl}`,
       `SUPABASE_ANON_KEY=${supabaseKey}`,
+      '',
+      '# Mother Company local-mirror bootstrap (idempotent, credential-free)',
+      `BOOTSTRAP_ADMIN_EMAIL=${bootstrapEmail}`,
+      `BOOTSTRAP_ADMIN_SUPABASE_ID=${bootstrapUid}`,
       '',
     ].join('\n');
     fs.writeFileSync(envPath, env, { encoding: 'utf8' });

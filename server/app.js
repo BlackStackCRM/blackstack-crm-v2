@@ -383,8 +383,13 @@ runSafeMigrations({ backup: process.env.MIGRATION_BACKUP !== 'false', recoverSta
     // MIGRATION_FAILED / INTEGRITY_FAILURE without rollback: stop, never continue destructively.
     process.exit(1);
   }
-  // Bootstrap seed data ONLY when DEMO_MODE=true (explicit, development-only).
-  const demoMode = process.env.DEMO_MODE === 'true';
+  // Bootstrap runs AFTER migrations and BEFORE startServer in BOTH demo and
+  // production. In production it creates the Mother Company admin mirror row
+  // (idempotent, credential-free) so a cloud-verified login resolves locally on
+  // a fresh/empty Second-PC database. In demo mode it also seeds master data.
+  // A recoverable bootstrap error must NOT abort startup: the database is
+  // already migrated and safe, and the login path (cloudToLocalSync) also
+  // self-heals the mirror row — so log loudly and still start the server.
   // Start the background retry worker AFTER migrations succeeded and the DB
   // connection is bound (runSafeMigrations completed above).
   startRetryWorker();
@@ -407,14 +412,12 @@ runSafeMigrations({ backup: process.env.MIGRATION_BACKUP !== 'false', recoverSta
         process.exit(1);
       });
   };
-  if (demoMode) {
-    seed().then(startServer).catch((err) => {
-      console.error('Failed to seed:', err);
-      process.exit(1);
+  seed()
+    .then(startServer)
+    .catch((err) => {
+      console.error('[startup] Bootstrap (seed) failed — continuing to start (migrations already completed):', err && err.message);
+      startServer();
     });
-  } else {
-    startServer();
-  }
 }).catch((err) => {
   console.error('Failed to run migrations:', err);
   process.exit(1);
