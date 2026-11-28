@@ -316,11 +316,24 @@ app.use((err, req, res, next) => {
   // and a future refactor that treats them the same would either leak internals
   // to shipped users or break local debugging.
   const isDev = process.env.NODE_ENV === 'development';
+  // Phase 72 (F71-08): keep the generic mask for genuinely unexpected faults,
+  // but surface the CURATED message of a known, safe AppError code so operators
+  // see e.g. "Could not verify the Supabase Auth account." instead of a blank
+  // "An unexpected internal error occurred." Only AppError-style codes are ever
+  // surfaced (SUPABASE_* / AGENCY_SYNC_REQUIRED / IDENTITY_MISMATCH); raw or
+  // unknown errors (e.g. SQLite messages that may contain SQL) stay masked. The
+  // stack trace remains server-side (dev only). Login (<500) semantics untouched.
+  const SAFE_5XX_CODE = /^(SUPABASE_|AGENCY_SYNC_REQUIRED$|IDENTITY_MISMATCH$)/;
+  const canSurface5xx = status >= 500 && !isDev && err && typeof err.code === 'string'
+    && SAFE_5XX_CODE.test(err.code) && typeof err.message === 'string' && err.message.length > 0;
+  const message = status >= 500 && !isDev
+    ? (canSurface5xx ? err.message : 'An unexpected internal error occurred.')
+    : (err.message || 'An unexpected internal error occurred.');
   res.status(status).json({
     success: false,
     error: {
       code: err.code || 'INTERNAL_ERROR',
-      message: status >= 500 && !isDev ? 'An unexpected internal error occurred.' : (err.message || 'An unexpected internal error occurred.'),
+      message,
       // Per-field validation detail, when the error carries it.
       //
       // ValidationError accepts a field map (utils/errors.js) and errorMapping

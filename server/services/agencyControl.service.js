@@ -427,26 +427,33 @@ class AgencyControlService {
     }
 
     // 1. Save to Local SQLite (Ensure related companies exist first to avoid FK errors)
+    //    FIX (Phase 72, F71-02): the company stub, the agency row and the
+    //    parent link MUST succeed together. Previously these ran as separate
+    //    statements outside a transaction, so a mid-sequence failure left a
+    //    company + agency with no parent link (a partial record). They are now
+    //    wrapped in a single transaction that rolls back as a unit.
     try {
-      // Ensure the provider company 'default' exists (if not, create a stub)
-      this.db.run("INSERT OR IGNORE INTO companies (id, name, status) VALUES ('default', 'Default Provider', 'ACTIVE')");
-      // Ensure the agency's own tenant company exists
-      this.db.run('INSERT OR IGNORE INTO companies (id, name, status) VALUES (?, ?, ?)', [companyId, cleanName, 'ACTIVE']);
+      this.db.transaction(() => {
+        // Ensure the provider company 'default' exists (if not, create a stub)
+        this.db.run("INSERT OR IGNORE INTO companies (id, name, status) VALUES ('default', 'Default Provider', 'ACTIVE')");
+        // Ensure the agency's own tenant company exists
+        this.db.run('INSERT OR IGNORE INTO companies (id, name, status) VALUES (?, ?, ?)', [companyId, cleanName, 'ACTIVE']);
 
-      // Insert the agency
-      this.db.run(
-        'INSERT INTO agencies (id, company_id, provider_company_id, name, agency_code, status) VALUES (?, ?, ?, ?, ?, ?)',
-        [id, companyId, 'default', cleanName, code, 'PENDING']
-      );
-      // Parent link only when a parent exists. ROOT agencies (created by the
-      // Mother Company operator via the MC page) have no parent link by
-      // design — strict separation: roots are MC territory, subs are AC.
-      if (parentId) {
+        // Insert the agency
         this.db.run(
-          'INSERT INTO agency_parent_relationships (child_agency_id, parent_agency_id, created_by) VALUES (?,?,?)',
-          [id, parentId, user && user.userId],
+          'INSERT INTO agencies (id, company_id, provider_company_id, name, agency_code, status) VALUES (?, ?, ?, ?, ?, ?)',
+          [id, companyId, 'default', cleanName, code, 'PENDING']
         );
-      }
+        // Parent link only when a parent exists. ROOT agencies (created by the
+        // Mother Company operator via the MC page) have no parent link by
+        // design — strict separation: roots are MC territory, subs are AC.
+        if (parentId) {
+          this.db.run(
+            'INSERT INTO agency_parent_relationships (child_agency_id, parent_agency_id, created_by) VALUES (?,?,?)',
+            [id, parentId, user && user.userId],
+          );
+        }
+      })();
     } catch (err) {
       console.error('Local create failed:', err);
       throw err;
@@ -1557,9 +1564,22 @@ class AgencyControlService {
     // Promise is always truthy) and `.company_id` was read off a Promise
     // (undefined) → NOT NULL constraint failed: provider_company_id.
     await this.assertAgencyInScope(userId, agencyId);
-    const dup = this.db.get('SELECT id FROM companies WHERE LOWER(name) = LOWER(?) LIMIT 1', [clean]);
+    // FIX (Phase 72, F71-04): the duplicate-name check was GLOBAL (any company
+    // with this name anywhere blocked creation). Customer uniqueness is scoped
+    // to the agency the customer is being created under — the same customer
+    // name is allowed under a DIFFERENT agency, but not twice under the same
+    // one. Scoping the check to customer_tenant_agencies for THIS agency also
+    // stops a customer name colliding with an unrelated agency/company name.
+    const dup = this.db.get(
+      `SELECT cta.company_id AS id
+         FROM customer_tenant_agencies cta
+         JOIN companies c ON c.id = cta.company_id
+        WHERE cta.agency_id = ? AND LOWER(c.name) = LOWER(?)
+        LIMIT 1`,
+      [agencyId, clean],
+    );
     if (dup) {
-      throw new ValidationError('Customer validation failed.', { name: `A company named "${clean}" already exists.` });
+      throw new ValidationError('Customer validation failed.', { name: `A customer named "${clean}" already exists in this agency.` });
     }
     const caller = await this.callerAgency(userId);
     const providerCompanyId = caller && caller.company_id ? caller.company_id : 'default';
@@ -1587,12 +1607,20 @@ class AgencyControlService {
     try {
       const sb = getSupabaseClient();
       const cloudAgencyId = isUuid(agencyId) ? agencyId : localIdToCloudUuid(agencyId);
+      // FIX (Phase 72, F71-03): the customer's company row was upserted with the
+      // LOCAL cmp_* id, which is not a Supabase UUID (companies.id is a UUID PK)
+      // — the upsert always failed with an invalid-uuid error. Map the local id
+      // to its deterministic cloud UUID (the same mapping agencies use) and use
+      // that SAME cloud id for both the company row and the mapping row so the
+      // customer_tenant_agencies.company_id -> companies.id FK holds in the
+      // cloud. Local SQLite remains authoritative; this is best-effort.
+      const cloudCompanyId = isUuid(companyId) ? companyId : localIdToCloudUuid(companyId);
       await sb.from('companies').upsert(
-        [{ id: companyId, name: clean, status: 'ACTIVE' }],
+        [{ id: cloudCompanyId, name: clean, status: 'ACTIVE' }],
         { onConflict: 'id' },
       );
       const { error: mapErr } = await sb.from('customer_tenant_agencies').upsert(
-        [{ company_id: companyId, agency_id: cloudAgencyId, provider_company_id: providerCompanyId, assigned_by: userId }],
+        [{ company_id: cloudCompanyId, agency_id: cloudAgencyId, provider_company_id: providerCompanyId, assigned_by: userId }],
         { onConflict: 'company_id' },
       );
       if (mapErr) console.error('[agency-control] customer mapping cloud sync failed:', mapErr.message || JSON.stringify(mapErr));
